@@ -1,0 +1,29 @@
+FROM php:8.2-apache
+
+# Extensions nécessaires
+RUN apt-get update && apt-get install -y \
+    libsqlite3-dev \
+    && docker-php-ext-install pdo pdo_sqlite \
+    && rm -rf /var/lib/apt/lists/*
+
+# Activer mod_rewrite
+RUN a2enmod rewrite
+
+# Config Apache
+RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
+RUN echo '<Directory /var/www/html/public>\n    Options Indexes FollowSymLinks\n    AllowOverride All\n    Require all granted\n</Directory>' \
+    >> /etc/apache2/sites-available/000-default.conf
+
+# Copier le code
+COPY . /var/www/html/
+
+# Créer le dossier data avec les bonnes permissions
+RUN mkdir -p /var/www/html/data \
+    && chown -R www-data:www-data /var/www/html/data \
+    && chmod 755 /var/www/html/data
+
+# Liens symboliques pour que public/ accède à api/ et data/
+# (api/ est déjà à la racine, accessible via /api/)
+RUN chown -R www-data:www-data /var/www/html
+
+EXPOSE 80
