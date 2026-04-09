@@ -1,5 +1,5 @@
 /**
- * UX Note Cloud v3 — Script client
+ * UX Note Cloud v4 — Script client
  * Charte graphique Equinoxes — equinoxes.fr
  * MIT License
  */
@@ -29,6 +29,7 @@
   let pinElements    = [];
   let pendingPos     = null;
   let authenticated  = !PASSWORD;
+  let projectArchived = false;
 
   const C = {
     primary: '#222339', accent: '#3ce65f', slate: '#757686',
@@ -36,204 +37,196 @@
     shadow: 'rgba(34,35,57,0.15)',
   };
 
-  // ─── Styles ────────────────────────────────────────────────────────────────
   const style = document.createElement('style');
   style.textContent = `
     @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Montserrat:wght@300;400;500;600&display=swap');
 
-    /* Bouton — en bas à GAUCHE */
-    #uxnote-bar {
-      position: fixed; bottom: 24px; left: 20px; z-index: 999999;
-      font-family: 'Montserrat', sans-serif;
-    }
+    #uxnote-bar { position:fixed; bottom:24px; left:20px; z-index:999999; font-family:'Montserrat',sans-serif; }
     #uxnote-toggle-btn {
-      background: ${C.primary}; color: ${C.white}; border: none; border-radius: 50px;
-      padding: 11px 20px; cursor: pointer; font-size: 13px; font-weight: 600;
-      box-shadow: 0 4px 16px ${C.shadow}; display: flex; align-items: center; gap: 8px;
-      transition: all 0.2s; letter-spacing: 0.03em; font-family: 'Montserrat', sans-serif;
-      border-left: 3px solid ${C.accent};
+      background:${C.primary}; color:${C.white}; border:none; border-radius:50px;
+      padding:11px 20px; cursor:pointer; font-size:13px; font-weight:600;
+      box-shadow:0 4px 16px ${C.shadow}; display:flex; align-items:center; gap:8px;
+      transition:all 0.2s; letter-spacing:0.03em; font-family:'Montserrat',sans-serif;
+      border-left:3px solid ${C.accent};
     }
-    #uxnote-toggle-btn:hover { background: #2d2f4a; transform: translateY(-1px); }
-    #uxnote-toggle-btn.active { background: ${C.danger}; border-left-color: #ff8fa3; }
-    #uxnote-btn-label { color: ${C.white}; font-weight: 600; }
+    #uxnote-toggle-btn:hover { background:#2d2f4a; transform:translateY(-1px); }
+    #uxnote-toggle-btn.active { background:${C.danger}; border-left-color:#ff8fa3; }
+    #uxnote-toggle-btn.archived { background:${C.slate}; border-left-color:#9b9dba; cursor:default; }
+    #uxnote-toggle-btn.archived:hover { transform:none; background:${C.slate}; }
+    #uxnote-btn-label { color:${C.white}; font-weight:600; }
 
-    /* Panel — s'ouvre à DROITE */
     #uxnote-panel {
-      position: fixed; top: 0; right: 0; width: 360px; height: 100vh;
-      background: ${C.white}; box-shadow: -4px 0 28px ${C.shadow};
-      z-index: 999998; display: none; flex-direction: column;
-      font-family: 'Montserrat', sans-serif; font-size: 14px; overflow: hidden;
+      position:fixed; top:0; right:0; width:360px; height:100vh;
+      background:${C.white}; box-shadow:-4px 0 28px ${C.shadow};
+      z-index:999998; display:none; flex-direction:column;
+      font-family:'Montserrat',sans-serif; font-size:14px; overflow:hidden;
     }
-    #uxnote-panel.open { display: flex; }
+    #uxnote-panel.open { display:flex; }
     #uxnote-panel-header {
-      background: ${C.primary}; color: ${C.white}; padding: 18px 20px;
-      display: flex; justify-content: space-between; align-items: center;
-      flex-shrink: 0; border-bottom: 3px solid ${C.accent};
+      background:${C.primary}; color:${C.white}; padding:18px 20px;
+      display:flex; justify-content:space-between; align-items:center;
+      flex-shrink:0; border-bottom:3px solid ${C.accent};
     }
+    #uxnote-panel-header.archived-header { border-bottom-color:${C.slate}; background:#3d3f5a; }
     #uxnote-panel-header h3 {
-      font-family: 'Raleway', sans-serif; font-size: 16px; font-weight: 700;
-      display: flex; align-items: center; gap: 8px; color: ${C.white};
+      font-family:'Raleway',sans-serif; font-size:16px; font-weight:700;
+      display:flex; align-items:center; gap:8px; color:${C.white};
     }
     #uxnote-panel-header h3::before {
-      content: ''; display: inline-block; width: 8px; height: 8px;
-      background: ${C.accent}; border-radius: 50%;
+      content:''; display:inline-block; width:8px; height:8px;
+      background:${C.accent}; border-radius:50%;
     }
-    #uxnote-close-panel {
-      background: none; border: none; color: ${C.white}; cursor: pointer;
-      font-size: 20px; opacity: 0.7; transition: opacity 0.15s;
-    }
-    #uxnote-close-panel:hover { opacity: 1; }
-    #uxnote-panel-body { flex: 1; overflow-y: auto; padding: 16px; background: ${C.light}; }
-    #uxnote-panel-footer { padding: 12px 16px; border-top: 1px solid #e2e4ef; background: ${C.white}; flex-shrink: 0; }
+    #uxnote-panel-header.archived-header h3::before { background:${C.slate}; }
+    #uxnote-close-panel { background:none; border:none; color:${C.white}; cursor:pointer; font-size:20px; opacity:0.7; }
+    #uxnote-close-panel:hover { opacity:1; }
+    #uxnote-panel-body { flex:1; overflow-y:auto; padding:16px; background:${C.light}; }
+    #uxnote-panel-footer { padding:12px 16px; border-top:1px solid #e2e4ef; background:${C.white}; flex-shrink:0; }
 
-    /* Annotations */
+    .uxnote-archived-banner {
+      background:#f0f1f8; border:1px solid #c8cadf; border-radius:8px;
+      padding:12px 14px; margin-bottom:12px; font-size:12px; color:#3d3f5a;
+      display:flex; align-items:center; gap:8px;
+    }
+
     .uxnote-annotation-item {
-      border: 1px solid #e2e4ef; border-radius: 10px; padding: 13px 14px;
-      margin-bottom: 10px; background: ${C.white}; border-left: 3px solid ${C.primary};
+      border:1px solid #e2e4ef; border-radius:10px; padding:13px 14px;
+      margin-bottom:10px; background:${C.white}; border-left:3px solid ${C.primary};
     }
-    .uxnote-annotation-item.resolved { border-left-color: ${C.accent}; opacity: 0.65; }
-    .uxnote-annotation-item.mine { border-left-color: #9b5de5; }
-    .uxnote-annotation-meta { font-size: 11px; color: ${C.slate}; margin-bottom: 6px; font-weight: 500; }
-    .uxnote-annotation-meta strong { color: ${C.primary}; }
-    .uxnote-annotation-text { color: ${C.primary}; line-height: 1.55; margin-bottom: 8px; font-size: 13px; }
+    .uxnote-annotation-item.resolved { border-left-color:${C.accent}; opacity:0.65; }
+    .uxnote-annotation-item.mine { border-left-color:#9b5de5; }
+    .uxnote-annotation-meta { font-size:11px; color:${C.slate}; margin-bottom:6px; font-weight:500; }
+    .uxnote-annotation-meta strong { color:${C.primary}; }
+    .uxnote-annotation-text { color:${C.primary}; line-height:1.55; margin-bottom:8px; font-size:13px; }
     .uxnote-file-attach {
-      display: inline-flex; align-items: center; gap: 5px;
-      background: #f0f9f1; border: 1px solid #c7f0d2; border-radius: 5px;
-      padding: 4px 9px; font-size: 11px; color: #2ab54a; margin-bottom: 8px; font-weight: 500;
+      display:inline-flex; align-items:center; gap:5px;
+      background:#f0f9f1; border:1px solid #c7f0d2; border-radius:5px;
+      padding:4px 9px; font-size:11px; color:#2ab54a; margin-bottom:8px; font-weight:500;
     }
-
-    /* Réponses */
-    .uxnote-replies { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e4ef; }
-    .uxnote-reply-item { background: ${C.light}; border-radius: 7px; padding: 8px 10px; margin-bottom: 6px; font-size: 12px; }
-    .uxnote-reply-meta { color: ${C.slate}; margin-bottom: 3px; font-size: 11px; }
-    .uxnote-reply-text { color: ${C.primary}; }
-    .uxnote-reply-form { margin-top: 8px; display: none; }
-    .uxnote-reply-form.open { display: block; }
+    .uxnote-replies { margin-top:10px; padding-top:10px; border-top:1px dashed #e2e4ef; }
+    .uxnote-reply-item { background:${C.light}; border-radius:7px; padding:8px 10px; margin-bottom:6px; font-size:12px; }
+    .uxnote-reply-meta { color:${C.slate}; margin-bottom:3px; font-size:11px; }
+    .uxnote-reply-text { color:${C.primary}; }
+    .uxnote-reply-form { margin-top:8px; display:none; }
+    .uxnote-reply-form.open { display:block; }
     .uxnote-reply-form textarea {
-      width: 100%; padding: 8px; border: 1px solid #e2e4ef; border-radius: 6px;
-      font-size: 12px; font-family: 'Montserrat', sans-serif; resize: vertical;
-      min-height: 60px; margin-bottom: 6px; box-sizing: border-box;
+      width:100%; padding:8px; border:1px solid #e2e4ef; border-radius:6px;
+      font-size:12px; font-family:'Montserrat',sans-serif; resize:vertical;
+      min-height:60px; margin-bottom:6px; box-sizing:border-box;
     }
-    .uxnote-reply-form textarea:focus { outline: none; border-color: ${C.accent}; }
-    .uxnote-reply-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .uxnote-reply-form textarea:focus { outline:none; border-color:${C.accent}; }
+    .uxnote-reply-actions { display:flex; gap:6px; justify-content:flex-end; }
 
-    /* Boutons actions — blancs */
-    .uxnote-annotation-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .uxnote-annotation-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
     .uxnote-btn-sm {
-      padding: 5px 11px; border-radius: 5px; border: 1px solid #e2e4ef;
-      background: ${C.white}; cursor: pointer; font-size: 11px; color: #475569;
-      transition: all 0.15s; font-family: 'Montserrat', sans-serif; font-weight: 500;
+      padding:5px 11px; border-radius:5px; border:1px solid #e2e4ef;
+      background:${C.white}; cursor:pointer; font-size:11px; color:#475569;
+      transition:all 0.15s; font-family:'Montserrat',sans-serif; font-weight:500;
     }
-    .uxnote-btn-sm:hover { background: ${C.light}; }
-    .uxnote-btn-sm.see-btn  { border-color: #e2e4ef; color: ${C.slate}; background: ${C.white}; }
-    .uxnote-btn-sm.see-btn:hover { background: ${C.light}; }
-    .uxnote-btn-sm.reply-btn { border-color: ${C.primary}; color: ${C.primary}; background: ${C.white}; }
-    .uxnote-btn-sm.reply-btn:hover { background: #f0f1f8; }
-    .uxnote-btn-sm.resolve  { border-color: ${C.accent}; color: #2ab54a; background: ${C.white}; }
-    .uxnote-btn-sm.resolve:hover { background: #f0f9f1; }
-    .uxnote-btn-sm.unresolve { border-color: #e2e4ef; color: ${C.slate}; background: ${C.white}; }
-    .uxnote-btn-sm.delete   { border-color: #e2e4ef; color: ${C.slate}; background: ${C.white}; }
-    .uxnote-btn-sm.delete:hover { border-color: ${C.danger}; color: ${C.danger}; background: #fff0f1; }
+    .uxnote-btn-sm:hover { background:${C.light}; }
+    .uxnote-btn-sm.see-btn   { border-color:#e2e4ef; color:${C.slate}; }
+    .uxnote-btn-sm.reply-btn { border-color:${C.primary}; color:${C.primary}; }
+    .uxnote-btn-sm.reply-btn:hover { background:#f0f1f8; }
+    .uxnote-btn-sm.resolve   { border-color:${C.accent}; color:#2ab54a; }
+    .uxnote-btn-sm.resolve:hover { background:#f0f9f1; }
+    .uxnote-btn-sm.unresolve { border-color:#e2e4ef; color:${C.slate}; }
+    .uxnote-btn-sm.delete    { border-color:#e2e4ef; color:${C.slate}; }
+    .uxnote-btn-sm.delete:hover { border-color:${C.danger}; color:${C.danger}; background:#fff0f1; }
 
-    /* Pins */
     .uxnote-pin {
-      position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg); display: flex; align-items: center; justify-content: center;
-      cursor: pointer; z-index: 99999; border: 2px solid ${C.white};
-      box-shadow: 0 2px 8px ${C.shadow}; transition: transform 0.15s;
+      position:absolute; width:28px; height:28px; border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg); display:flex; align-items:center; justify-content:center;
+      cursor:pointer; z-index:99999; border:2px solid ${C.white};
+      box-shadow:0 2px 8px ${C.shadow}; transition:transform 0.15s;
     }
-    .uxnote-pin:hover { transform: rotate(-45deg) scale(1.15); }
-    .uxnote-pin-number { transform: rotate(45deg); color: ${C.white}; font-size: 11px; font-weight: 700; font-family: 'Montserrat', sans-serif; }
-    .uxnote-pin.status-open { background: ${C.primary}; }
-    .uxnote-pin.status-open.mine { background: #9b5de5; }
-    .uxnote-pin.status-resolved { background: ${C.accent}; }
+    .uxnote-pin:hover { transform:rotate(-45deg) scale(1.15); }
+    .uxnote-pin-number { transform:rotate(45deg); color:${C.white}; font-size:11px; font-weight:700; font-family:'Montserrat',sans-serif; }
+    .uxnote-pin.status-open     { background:${C.primary}; }
+    .uxnote-pin.status-open.mine { background:#9b5de5; }
+    .uxnote-pin.status-resolved { background:${C.accent}; }
 
-    /* Hint curseur */
     #uxnote-cursor-hint {
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: ${C.primary}; color: ${C.white}; padding: 14px 24px;
-      border-radius: 10px; font-size: 14px; font-weight: 600; z-index: 999997;
-      pointer-events: none; display: none; font-family: 'Montserrat', sans-serif;
-      box-shadow: 0 8px 24px ${C.shadow}; border-left: 4px solid ${C.accent};
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      background:${C.primary}; color:${C.white}; padding:14px 24px;
+      border-radius:10px; font-size:14px; font-weight:600; z-index:999997;
+      pointer-events:none; display:none; font-family:'Montserrat',sans-serif;
+      box-shadow:0 8px 24px ${C.shadow}; border-left:4px solid ${C.accent};
     }
 
-    /* Modal annotation */
     #uxnote-modal-overlay {
-      position: fixed; inset: 0; background: rgba(34,35,57,0.45); z-index: 9999999;
-      display: none; align-items: center; justify-content: center;
+      position:fixed; inset:0; background:rgba(34,35,57,0.45); z-index:9999999;
+      display:none; align-items:center; justify-content:center;
     }
-    #uxnote-modal-overlay.open { display: flex; }
+    #uxnote-modal-overlay.open { display:flex; }
     #uxnote-modal {
-      background: ${C.white}; border-radius: 14px; padding: 26px; width: 380px;
-      box-shadow: 0 20px 50px ${C.shadow}; font-family: 'Montserrat', sans-serif;
-      border-top: 4px solid ${C.accent};
+      background:${C.white}; border-radius:14px; padding:26px; width:380px;
+      box-shadow:0 20px 50px ${C.shadow}; font-family:'Montserrat',sans-serif;
+      border-top:4px solid ${C.accent};
     }
-    #uxnote-modal h4 { margin: 0 0 16px; font-size: 15px; color: ${C.primary}; font-family: 'Raleway', sans-serif; font-weight: 700; }
+    #uxnote-modal h4 { margin:0 0 16px; font-size:15px; color:${C.primary}; font-family:'Raleway',sans-serif; font-weight:700; }
     #uxnote-modal input, #uxnote-modal textarea {
-      width: 100%; box-sizing: border-box; padding: 10px 12px;
-      border: 1px solid #e2e4ef; border-radius: 8px; font-size: 13px;
-      margin-bottom: 10px; outline: none; font-family: 'Montserrat', sans-serif; color: ${C.primary};
+      width:100%; box-sizing:border-box; padding:10px 12px;
+      border:1px solid #e2e4ef; border-radius:8px; font-size:13px;
+      margin-bottom:10px; outline:none; font-family:'Montserrat',sans-serif; color:${C.primary};
     }
-    #uxnote-modal input:focus, #uxnote-modal textarea:focus { border-color: ${C.accent}; }
-    #uxnote-modal textarea { resize: vertical; min-height: 90px; }
+    #uxnote-modal input:focus, #uxnote-modal textarea:focus { border-color:${C.accent}; }
+    #uxnote-modal textarea { resize:vertical; min-height:90px; }
     .uxnote-file-label {
-      display: flex; align-items: center; gap: 8px; cursor: pointer;
-      padding: 9px 12px; border: 1px dashed #e2e4ef; border-radius: 8px;
-      font-size: 12px; color: ${C.slate}; margin-bottom: 10px;
-      transition: border-color 0.15s; background: ${C.light};
+      display:flex; align-items:center; gap:8px; cursor:pointer;
+      padding:9px 12px; border:1px dashed #e2e4ef; border-radius:8px;
+      font-size:12px; color:${C.slate}; margin-bottom:10px;
+      transition:border-color 0.15s; background:${C.light};
     }
-    .uxnote-file-label:hover { border-color: ${C.accent}; color: ${C.primary}; }
-    .uxnote-file-label input { display: none; }
-    #uxnote-file-selected { font-size: 11px; color: #2ab54a; font-weight: 600; margin-bottom: 8px; min-height: 16px; }
-    #uxnote-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+    .uxnote-file-label:hover { border-color:${C.accent}; color:${C.primary}; }
+    .uxnote-file-label input { display:none; }
+    #uxnote-file-selected { font-size:11px; color:#2ab54a; font-weight:600; margin-bottom:8px; min-height:16px; }
+    #uxnote-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:4px; }
     .uxnote-modal-btn {
-      padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer;
-      font-size: 13px; font-weight: 600; font-family: 'Montserrat', sans-serif; transition: all 0.15s;
+      padding:9px 18px; border-radius:8px; border:none; cursor:pointer;
+      font-size:13px; font-weight:600; font-family:'Montserrat',sans-serif; transition:all 0.15s;
     }
-    .uxnote-modal-btn.cancel { background: ${C.light}; color: ${C.slate}; }
-    .uxnote-modal-btn.submit { background: ${C.primary}; color: ${C.white}; border-left: 3px solid ${C.accent}; }
-    .uxnote-modal-btn.submit:hover { background: #2d2f4a; }
+    .uxnote-modal-btn.cancel { background:${C.light}; color:${C.slate}; }
+    .uxnote-modal-btn.submit { background:${C.primary}; color:${C.white}; border-left:3px solid ${C.accent}; }
+    .uxnote-modal-btn.submit:hover { background:#2d2f4a; }
 
-    /* Mot de passe */
     #uxnote-pwd-overlay {
-      position: fixed; inset: 0; background: rgba(34,35,57,0.6); z-index: 9999998;
-      display: none; align-items: center; justify-content: center;
+      position:fixed; inset:0; background:rgba(34,35,57,0.6); z-index:9999998;
+      display:none; align-items:center; justify-content:center;
     }
-    #uxnote-pwd-overlay.open { display: flex; }
+    #uxnote-pwd-overlay.open { display:flex; }
     #uxnote-pwd-box {
-      background: ${C.white}; border-radius: 14px; padding: 28px; width: 320px;
-      box-shadow: 0 20px 50px ${C.shadow}; text-align: center;
-      border-top: 4px solid ${C.accent}; font-family: 'Montserrat', sans-serif;
+      background:${C.white}; border-radius:14px; padding:28px; width:320px;
+      box-shadow:0 20px 50px ${C.shadow}; text-align:center;
+      border-top:4px solid ${C.accent}; font-family:'Montserrat',sans-serif;
     }
-    #uxnote-pwd-box h4 { font-family: 'Raleway', sans-serif; color: ${C.primary}; margin-bottom: 16px; font-size: 16px; }
+    #uxnote-pwd-box h4 { font-family:'Raleway',sans-serif; color:${C.primary}; margin-bottom:16px; font-size:16px; }
     #uxnote-pwd-input {
-      width: 100%; padding: 10px 12px; border: 1px solid #e2e4ef; border-radius: 8px;
-      font-size: 14px; margin-bottom: 10px; outline: none; text-align: center;
-      letter-spacing: 0.1em; font-family: 'Montserrat', sans-serif; box-sizing: border-box;
+      width:100%; padding:10px 12px; border:1px solid #e2e4ef; border-radius:8px;
+      font-size:14px; margin-bottom:10px; outline:none; text-align:center;
+      letter-spacing:0.1em; font-family:'Montserrat',sans-serif; box-sizing:border-box;
     }
-    #uxnote-pwd-input:focus { border-color: ${C.accent}; }
-    #uxnote-pwd-error { color: ${C.danger}; font-size: 12px; margin-bottom: 8px; display: none; }
+    #uxnote-pwd-input:focus { border-color:${C.accent}; }
+    #uxnote-pwd-error { color:${C.danger}; font-size:12px; margin-bottom:8px; display:none; }
     #uxnote-pwd-submit {
-      width: 100%; padding: 10px; background: ${C.primary}; color: ${C.white};
-      border: none; border-radius: 8px; cursor: pointer; font-size: 14px;
-      font-weight: 600; font-family: 'Montserrat', sans-serif; border-left: 3px solid ${C.accent};
+      width:100%; padding:10px; background:${C.primary}; color:${C.white};
+      border:none; border-radius:8px; cursor:pointer; font-size:14px;
+      font-weight:600; font-family:'Montserrat',sans-serif; border-left:3px solid ${C.accent};
     }
-    #uxnote-pwd-submit:hover { background: #2d2f4a; }
+    #uxnote-pwd-submit:hover { background:#2d2f4a; }
 
-    .uxnote-empty { text-align: center; color: ${C.slate}; padding: 32px 16px; }
-    .uxnote-empty p { font-size: 13px; }
-    body.uxnote-mode-active { cursor: crosshair !important; }
-    body.uxnote-mode-active * { cursor: crosshair !important; }
+    .uxnote-empty { text-align:center; color:${C.slate}; padding:32px 16px; }
+    .uxnote-empty p { font-size:13px; }
+    body.uxnote-mode-active { cursor:crosshair !important; }
+    body.uxnote-mode-active * { cursor:crosshair !important; }
     #uxnote-add-btn {
-      width: 100%; padding: 10px; background: ${C.primary}; color: ${C.white};
-      border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
-      font-family: 'Montserrat', sans-serif; border-left: 3px solid ${C.accent}; transition: background 0.15s;
+      width:100%; padding:10px; background:${C.primary}; color:${C.white};
+      border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;
+      font-family:'Montserrat',sans-serif; border-left:3px solid ${C.accent}; transition:background 0.15s;
     }
-    #uxnote-add-btn:hover { background: #2d2f4a; }
+    #uxnote-add-btn:hover { background:#2d2f4a; }
+    #uxnote-add-btn:disabled { background:${C.slate}; border-left-color:#9b9dba; cursor:default; }
   `;
   document.head.appendChild(style);
 
-  // ─── DOM ───────────────────────────────────────────────────────────────────
   function createUI() {
     const bar = document.createElement('div');
     bar.id = 'uxnote-bar';
@@ -250,7 +243,7 @@
     panel.id = 'uxnote-panel';
     panel.innerHTML = `
       <div id="uxnote-panel-header">
-        <h3>Annotations</h3>
+        <h3 id="uxnote-panel-title">Annotations</h3>
         <button id="uxnote-close-panel" title="Fermer">✕</button>
       </div>
       <div id="uxnote-panel-body">
@@ -272,7 +265,7 @@
       <div id="uxnote-modal">
         <h4>Nouvelle annotation</h4>
         <div id="uxnote-user-fields">
-          <input id="uxnote-input-name" type="text" placeholder="Votre prénom / nom *" />
+          <input id="uxnote-input-name"  type="text"  placeholder="Votre prénom / nom *" />
           <input id="uxnote-input-email" type="email" placeholder="Votre email (optionnel)" />
         </div>
         <textarea id="uxnote-input-text" placeholder="Décrivez votre annotation..."></textarea>
@@ -303,27 +296,44 @@
     document.body.appendChild(pwdOv);
   }
 
-  // ─── Rendu panel ───────────────────────────────────────────────────────────
-  // Trie les annotations par position Y (le plus haut = #1)
   function getSortedAnnotations() {
     return [...annotations].sort((a, b) => a.pos_y - b.pos_y);
   }
 
   function renderPanel() {
-    const body = document.getElementById('uxnote-panel-body');
+    const body   = document.getElementById('uxnote-panel-body');
+    const header = document.getElementById('uxnote-panel-header');
+    const addBtn = document.getElementById('uxnote-add-btn');
     if (!body) return;
+
+    if (projectArchived) {
+      header.classList.add('archived-header');
+      if (addBtn) addBtn.disabled = true;
+    } else {
+      header.classList.remove('archived-header');
+      if (addBtn) addBtn.disabled = false;
+    }
+
     const sorted = getSortedAnnotations();
     if (sorted.length === 0) {
-      body.innerHTML = `<div class="uxnote-empty"><p>Aucune annotation sur cette page.<br>Cliquez sur "Ajouter" pour commencer.</p></div>`;
+      body.innerHTML = `
+        ${projectArchived ? '<div class="uxnote-archived-banner">📦 Ce projet est archivé — lecture seule</div>' : ''}
+        <div class="uxnote-empty"><p>Aucune annotation sur cette page.</p></div>`;
       return;
     }
-    body.innerHTML = sorted.map((a, i) => {
+
+    const archivedBanner = projectArchived
+      ? '<div class="uxnote-archived-banner">📦 Ce projet est archivé — lecture seule</div>'
+      : '';
+
+    body.innerHTML = archivedBanner + sorted.map((a, i) => {
       const isMine  = a.author_token === userToken;
       const replies = (a.replies || []).map(r => `
         <div class="uxnote-reply-item">
           <div class="uxnote-reply-meta"><strong>${escHtml(r.author_name)}</strong> · ${formatDate(r.created_at)}</div>
           <div class="uxnote-reply-text">${escHtml(r.comment)}</div>
         </div>`).join('');
+
       return `
         <div class="uxnote-annotation-item ${a.status==='resolved'?'resolved':''} ${isMine?'mine':''}" data-id="${a.id}">
           <div class="uxnote-annotation-meta">
@@ -335,22 +345,25 @@
           <div class="uxnote-annotation-text">${escHtml(a.comment)}</div>
           ${a.file_name?`<div class="uxnote-file-attach">📎 ${escHtml(a.file_name)}</div>`:''}
           ${replies?`<div class="uxnote-replies">${replies}</div>`:''}
+          ${!projectArchived ? `
           <div class="uxnote-reply-form" id="reply-form-${a.id}">
             <textarea id="reply-text-${a.id}" placeholder="Votre réponse..."></textarea>
             <div class="uxnote-reply-actions">
               <button class="uxnote-btn-sm" onclick="document.getElementById('reply-form-${a.id}').classList.remove('open')">Annuler</button>
               <button class="uxnote-btn-sm resolve" onclick="submitReply(${a.id})">Envoyer</button>
             </div>
-          </div>
+          </div>` : ''}
           <div class="uxnote-annotation-actions">
             <button class="uxnote-btn-sm see-btn" onclick="document.uxnoteCloud.focusPin(${a.id})">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Voir
             </button>
+            ${!projectArchived ? `
             <button class="uxnote-btn-sm reply-btn" onclick="toggleReplyForm(${a.id})">↩ Répondre</button>
             ${a.status!=='resolved'
               ?`<button class="uxnote-btn-sm resolve" onclick="document.uxnoteCloud.resolve(${a.id})">✓ Résoudre</button>`
               :`<button class="uxnote-btn-sm unresolve" onclick="document.uxnoteCloud.unresolve(${a.id})">↩ Réouvrir</button>`}
             ${isMine?`<button class="uxnote-btn-sm delete" onclick="document.uxnoteCloud.deleteMine(${a.id})">🗑</button>`:''}
+            ` : ''}
           </div>
         </div>`;
     }).join('');
@@ -367,12 +380,11 @@
       pin.style.top  = (a.pos_y + window.scrollY) + 'px';
       pin.innerHTML  = `<span class="uxnote-pin-number">${i+1}</span>`;
       pin.title      = `#${i+1} ${a.author_name}: ${a.comment}`;
-      pin.dataset.annotationId = a.id;
       pin.addEventListener('click', () => {
         openPanel();
         setTimeout(() => {
           const el = document.querySelector(`[data-id="${a.id}"]`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
         }, 100);
       });
       document.body.appendChild(pin);
@@ -380,7 +392,22 @@
     });
   }
 
-  // ─── API ───────────────────────────────────────────────────────────────────
+  async function checkProjectStatus() {
+    try {
+      const res  = await fetch(`${API}?check_project=${encodeURIComponent(PROJECT_ID)}`);
+      const data = await res.json();
+      projectArchived = data.archived || false;
+      const btn = document.getElementById('uxnote-toggle-btn');
+      if (projectArchived) {
+        btn.classList.add('archived');
+        document.getElementById('uxnote-btn-label').textContent = 'Archivé';
+      } else {
+        btn.classList.remove('archived');
+        document.getElementById('uxnote-btn-label').textContent = 'Annoter';
+      }
+    } catch(e) { projectArchived = false; }
+  }
+
   async function loadAnnotations() {
     try {
       const res  = await fetch(`${API}?project_id=${encodeURIComponent(PROJECT_ID)}&page_url=${encodeURIComponent(PAGE_URL)}`);
@@ -390,16 +417,12 @@
     } catch(e) { console.error('UX Note Cloud:', e); }
   }
 
-  // ─── Réponse — corrigé ─────────────────────────────────────────────────────
   window.submitReply = async function(annotationId) {
+    if (projectArchived) return;
     const ta      = document.getElementById(`reply-text-${annotationId}`);
     const comment = ta ? ta.value.trim() : '';
     if (!comment) { if (ta) ta.focus(); return; }
-
-    if (!currentUser) {
-      alert('Veuillez d\'abord créer une annotation pour vous identifier.');
-      return;
-    }
+    if (!currentUser) { alert('Veuillez d\'abord créer une annotation pour vous identifier.'); return; }
 
     const btn = document.querySelector(`#reply-form-${annotationId} .resolve`);
     if (btn) { btn.disabled = true; btn.textContent = '...'; }
@@ -413,17 +436,16 @@
     fd.append('comment',       comment);
 
     try {
-      await fetch(API, { method: 'POST', body: fd });
+      await fetch(API, { method:'POST', body:fd });
       if (ta) ta.value = '';
       const form = document.getElementById(`reply-form-${annotationId}`);
       if (form) form.classList.remove('open');
       await loadAnnotations();
-    } catch(e) {
-      console.error('Erreur réponse:', e);
-    }
+    } catch(e) { console.error('Erreur réponse:', e); }
   };
 
   window.toggleReplyForm = function(id) {
+    if (projectArchived) return;
     const form = document.getElementById(`reply-form-${id}`);
     if (form) {
       form.classList.toggle('open');
@@ -434,8 +456,8 @@
     }
   };
 
-  // ─── Mode annotation ───────────────────────────────────────────────────────
   function activateMode() {
+    if (projectArchived) return;
     if (!authenticated) { openPasswordScreen(); return; }
     annotationMode = true;
     document.body.classList.add('uxnote-mode-active');
@@ -450,7 +472,7 @@
     document.body.classList.remove('uxnote-mode-active');
     document.getElementById('uxnote-cursor-hint').style.display = 'none';
     document.getElementById('uxnote-toggle-btn').classList.remove('active');
-    document.getElementById('uxnote-btn-label').textContent = 'Annoter';
+    document.getElementById('uxnote-btn-label').textContent = projectArchived ? 'Archivé' : 'Annoter';
   }
 
   function openPanel()  { document.getElementById('uxnote-panel').classList.add('open'); }
@@ -471,13 +493,14 @@
     setTimeout(() => document.getElementById('uxnote-input-text').focus(), 50);
   }
 
-  // ─── Events ────────────────────────────────────────────────────────────────
   function bindEvents() {
     document.getElementById('uxnote-toggle-btn').addEventListener('click', () => {
+      if (projectArchived) { openPanel(); return; }
       if (!authenticated) { openPasswordScreen(); return; }
       if (annotationMode) { deactivateMode(); openPanel(); } else { activateMode(); }
     });
     document.getElementById('uxnote-add-btn').addEventListener('click', () => {
+      if (projectArchived) return;
       document.getElementById('uxnote-panel').classList.remove('open');
       activateMode();
     });
@@ -534,7 +557,7 @@
       fd.append('pos_y',        pendingPos ? pendingPos.y : 0);
       const fileInput = document.getElementById('uxnote-file-input');
       if (fileInput && fileInput.files[0]) fd.append('file', fileInput.files[0]);
-      await fetch(API, { method: 'POST', body: fd });
+      await fetch(API, { method:'POST', body:fd });
       btn.disabled = false; btn.textContent = 'Envoyer';
       closeModal(); await loadAnnotations(); openPanel();
     });
@@ -559,27 +582,26 @@
     }
   }
 
-  // ─── API publique ──────────────────────────────────────────────────────────
   document.uxnoteCloud = {
     focusPin: (id) => {
       const sorted = getSortedAnnotations();
       const idx    = sorted.findIndex(a => a.id == id);
-      if (idx !== -1 && pinElements[idx]) {
-        pinElements[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      if (idx !== -1 && pinElements[idx]) pinElements[idx].scrollIntoView({ behavior:'smooth', block:'center' });
     },
     resolve:   (id) => updateStatus(id, 'resolved'),
     unresolve: (id) => updateStatus(id, 'open'),
     deleteMine: async (id) => {
+      if (projectArchived) return;
       if (!confirm('Supprimer votre annotation ?')) return;
-      await fetch(`${API}?id=${id}&token=${encodeURIComponent(userToken)}`, { method: 'DELETE' });
+      await fetch(`${API}?id=${id}&token=${encodeURIComponent(userToken)}`, { method:'DELETE' });
       await loadAnnotations();
     }
   };
 
   async function updateStatus(id, status) {
+    if (projectArchived) return;
     await fetch(API, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ id, status, actor: currentUser ? currentUser.name : 'Anonyme' })
     });
     await loadAnnotations();
@@ -592,10 +614,16 @@
     return new Date(ts*1000).toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
   }
 
-  function init() {
+  async function init() {
     createUI(); bindEvents();
+    await checkProjectStatus();
     if (authenticated) loadAnnotations();
-    setInterval(() => { if (authenticated) loadAnnotations(); }, 15000);
+    setInterval(async () => {
+      if (authenticated) {
+        await checkProjectStatus();
+        loadAnnotations();
+      }
+    }, 15000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
