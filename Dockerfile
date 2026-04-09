@@ -11,8 +11,20 @@ RUN a2enmod rewrite
 
 # Config Apache
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
-RUN echo '<Directory /var/www/html/public>\n    Options Indexes FollowSymLinks\n    AllowOverride All\n    Require all granted\n</Directory>' \
-    >> /etc/apache2/sites-available/000-default.conf
+
+RUN echo '\n\
+<Directory /var/www/html/public>\n\
+    Options Indexes FollowSymLinks\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>\n\
+\n\
+Alias /api /var/www/html/api\n\
+<Directory /var/www/html/api>\n\
+    Options Indexes FollowSymLinks\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>' >> /etc/apache2/sites-available/000-default.conf
 
 # Copier le code
 COPY . /var/www/html/
@@ -22,8 +34,6 @@ RUN mkdir -p /var/www/html/data \
     && chown -R www-data:www-data /var/www/html/data \
     && chmod 755 /var/www/html/data
 
-# Liens symboliques pour que public/ accède à api/ et data/
-# (api/ est déjà à la racine, accessible via /api/)
 RUN chown -R www-data:www-data /var/www/html
 
 EXPOSE 80
