@@ -1,22 +1,42 @@
 version: '3.8'
 
 services:
-  uxnote-cloud:
+  uxnote-app:
     build: .
-    container_name: uxnote-cloud
+    container_name: uxnote-app
     restart: unless-stopped
-    ports:
-      - "8080:80"   # Changer le port externe si besoin, Coolify gère ça via son reverse proxy
-    volumes:
-      - uxnote_data:/var/www/html/data   # Persistance SQLite
+    depends_on:
+      uxnote-db:
+        condition: service_healthy
     environment:
-      - APACHE_RUN_USER=www-data
-      - APACHE_RUN_GROUP=www-data
+      DB_HOST: uxnote-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-uxnote}
+      DB_USER: ${DB_USER:-uxnote}
+      DB_PASSWORD: ${DB_PASSWORD:-uxnote_secret}
+    volumes:
+      - uxnote_uploads:/var/www/html/data/uploads
     labels:
-      # Labels Coolify / Traefik (optionnel si vous configurez le domaine dans Coolify)
       - "traefik.enable=true"
-      # - "traefik.http.routers.uxnote.rule=Host(`uxnote.votre-domaine.fr`)"
+
+  uxnote-db:
+    image: postgres:16-alpine
+    container_name: uxnote-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-uxnote}
+      POSTGRES_USER: ${DB_USER:-uxnote}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-uxnote_secret}
+    volumes:
+      - uxnote_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-uxnote}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  uxnote_data:
+  uxnote_uploads:
+    driver: local
+  uxnote_db:
     driver: local
