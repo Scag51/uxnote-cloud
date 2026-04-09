@@ -2,8 +2,8 @@ FROM php:8.2-apache
 
 # Extensions nécessaires
 RUN apt-get update && apt-get install -y \
-    libsqlite3-dev \
-    && docker-php-ext-install pdo pdo_sqlite \
+    libpq-dev \
+    && docker-php-ext-install pdo pdo_pgsql \
     && rm -rf /var/lib/apt/lists/*
 
 # Activer mod_rewrite
@@ -29,8 +29,8 @@ Alias /api /var/www/html/api\n\
 # Copier le code
 COPY . /var/www/html/
 
-# Créer le dossier data avec les bonnes permissions
-RUN mkdir -p /var/www/html/data \
+# Créer le dossier uploads
+RUN mkdir -p /var/www/html/data/uploads \
     && chown -R www-data:www-data /var/www/html/data \
     && chmod 755 /var/www/html/data
 
