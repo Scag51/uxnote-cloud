@@ -1,14 +1,20 @@
 <?php
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
+$origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '*';
+header('Access-Control-Allow-Origin: ' . $origin);
 header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Accept');
+header('Access-Control-Allow-Credentials: true');
+header('Vary: Origin');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
+// ─── Config ────────────────────────────────────────────────────────────────
+define('UPLOAD_DIR', __DIR__ . '/../data/uploads/');
+define('MAX_FILE_SIZE', 5 * 1024 * 1024); // 5Mo
+
 // ─── Base de données ────────────────────────────────────────────────────────
 $db_path = __DIR__ . '/../data/uxnote.sqlite';
-
 try {
     $db = new PDO('sqlite:' . $db_path);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -17,111 +23,176 @@ try {
     json_error('Connexion DB impossible: ' . $e->getMessage(), 500);
 }
 
-// Création tables
+// ─── Migrations ─────────────────────────────────────────────────────────────
 $db->exec("
     CREATE TABLE IF NOT EXISTS annotations (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id  TEXT NOT NULL,
-        page_url    TEXT NOT NULL,
-        author_name TEXT NOT NULL,
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id   TEXT NOT NULL,
+        page_url     TEXT NOT NULL,
+        author_name  TEXT NOT NULL,
         author_email TEXT DEFAULT '',
-        comment     TEXT NOT NULL,
-        pos_x       REAL DEFAULT 0,
-        pos_y       REAL DEFAULT 0,
-        status      TEXT DEFAULT 'open',
-        created_at  INTEGER NOT NULL,
-        updated_at  INTEGER NOT NULL
+        author_token TEXT DEFAULT '',
+        comment      TEXT NOT NULL,
+        pos_x        REAL DEFAULT 0,
+        pos_y        REAL DEFAULT 0,
+        status       TEXT DEFAULT 'open',
+        file_name    TEXT DEFAULT '',
+        file_path    TEXT DEFAULT '',
+        file_size    INTEGER DEFAULT 0,
+        created_at   INTEGER NOT NULL,
+        updated_at   INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS replies (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        annotation_id   INTEGER NOT NULL,
+        author_name     TEXT NOT NULL,
+        author_email    TEXT DEFAULT '',
+        author_token    TEXT DEFAULT '',
+        comment         TEXT NOT NULL,
+        created_at      INTEGER NOT NULL,
+        FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS logs (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        action      TEXT NOT NULL,
+        project_id  TEXT DEFAULT '',
+        author_name TEXT DEFAULT '',
+        detail      TEXT DEFAULT '',
+        created_at  INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_project_page ON annotations(project_id, page_url);
+    CREATE INDEX IF NOT EXISTS idx_replies_annotation ON replies(annotation_id);
 ");
+
+// Migrations colonnes manquantes
+$cols = $db->query("PRAGMA table_info(annotations)")->fetchAll(PDO::FETCH_ASSOC);
+$col_names = array_column($cols, 'name');
+if (!in_array('author_token', $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN author_token TEXT DEFAULT ''");
+if (!in_array('file_name', $col_names))    $db->exec("ALTER TABLE annotations ADD COLUMN file_name TEXT DEFAULT ''");
+if (!in_array('file_path', $col_names))    $db->exec("ALTER TABLE annotations ADD COLUMN file_path TEXT DEFAULT ''");
+if (!in_array('file_size', $col_names))    $db->exec("ALTER TABLE annotations ADD COLUMN file_size INTEGER DEFAULT 0");
+
+// Créer dossier uploads
+if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
 
 // ─── Routing ────────────────────────────────────────────────────────────────
 $method = $_SERVER['REQUEST_METHOD'];
 
-switch ($method) {
+// Routes spéciales
+if ($method === 'GET' && isset($_GET['download'])) { serveFile($_GET['download']); }
+if ($method === 'GET' && isset($_GET['logs']))      { getLogs(); }
+if ($method === 'GET' && isset($_GET['replies']))   { getReplies(intval($_GET['replies'])); }
 
+switch ($method) {
     case 'GET':
-        // Route dashboard : ?all=1 → toutes les annotations
         if (isset($_GET['all'])) {
             $stmt = $db->query('SELECT * FROM annotations ORDER BY created_at DESC');
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($rows as &$row) {
+                $s = $db->prepare('SELECT COUNT(*) FROM replies WHERE annotation_id = ?');
+                $s->execute([$row['id']]);
+                $row['reply_count'] = (int)$s->fetchColumn();
+            }
             json_ok(['annotations' => $rows, 'count' => count($rows)]);
         }
-
         $project_id = $_GET['project_id'] ?? '';
         $page_url   = $_GET['page_url'] ?? '';
-
         if (!$project_id) json_error('project_id requis');
-
         $sql = 'SELECT * FROM annotations WHERE project_id = ?';
         $params = [$project_id];
-
-        if ($page_url) {
-            $sql .= ' AND page_url = ?';
-            $params[] = $page_url;
-        }
-        $sql .= ' ORDER BY created_at DESC';
-
+        if ($page_url) { $sql .= ' AND page_url = ?'; $params[] = $page_url; }
+        $sql .= ' ORDER BY created_at ASC';
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+        foreach ($rows as &$row) {
+            $s = $db->prepare('SELECT * FROM replies WHERE annotation_id = ? ORDER BY created_at ASC');
+            $s->execute([$row['id']]);
+            $row['replies'] = $s->fetchAll(PDO::FETCH_ASSOC);
+        }
         json_ok(['annotations' => $rows, 'count' => count($rows)]);
         break;
 
     case 'POST':
-        $body = json_decode(file_get_contents('php://input'), true);
-        if (!$body) json_error('Corps JSON invalide');
+        if (isset($_POST['action']) && $_POST['action'] === 'reply') {
+            $annotation_id = intval($_POST['annotation_id'] ?? 0);
+            $author_name   = sanitize($_POST['author_name'] ?? '');
+            $author_email  = sanitize($_POST['author_email'] ?? '');
+            $author_token  = sanitize($_POST['author_token'] ?? '');
+            $comment       = sanitize($_POST['comment'] ?? '');
+            if (!$annotation_id || !$author_name || !$comment) json_error('Champs requis manquants');
+            $stmt = $db->prepare("INSERT INTO replies (annotation_id, author_name, author_email, author_token, comment, created_at) VALUES (?,?,?,?,?,?)");
+            $stmt->execute([$annotation_id, $author_name, $author_email, $author_token, $comment, time()]);
+            addLog('reply', '', $author_name, "Réponse à l'annotation #$annotation_id");
+            json_ok(['id' => $db->lastInsertId(), 'message' => 'Réponse ajoutée'], 201);
+        }
 
-        $required = ['project_id', 'page_url', 'author_name', 'comment'];
-        foreach ($required as $f) {
-            if (empty($body[$f])) json_error("Champ requis manquant: $f");
+        $project_id   = sanitize($_POST['project_id'] ?? '');
+        $page_url     = sanitize($_POST['page_url'] ?? '');
+        $author_name  = sanitize($_POST['author_name'] ?? '');
+        $author_email = sanitize($_POST['author_email'] ?? '');
+        $author_token = sanitize($_POST['author_token'] ?? '');
+        $comment      = sanitize($_POST['comment'] ?? '');
+        $pos_x        = floatval($_POST['pos_x'] ?? 0);
+        $pos_y        = floatval($_POST['pos_y'] ?? 0);
+
+        if (!$project_id || !$page_url || !$author_name || !$comment) json_error('Champs requis manquants');
+
+        $file_name = ''; $file_path = ''; $file_size = 0;
+        if (!empty($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK) {
+            if ($_FILES['file']['size'] > MAX_FILE_SIZE) json_error('Fichier trop volumineux (max 5Mo)');
+            $ext       = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
+            $safe_name = time() . '_' . uniqid() . '.' . preg_replace('/[^a-z0-9]/i', '', $ext);
+            $dest      = UPLOAD_DIR . $safe_name;
+            if (move_uploaded_file($_FILES['file']['tmp_name'], $dest)) {
+                $file_name = $_FILES['file']['name'];
+                $file_path = $safe_name;
+                $file_size = $_FILES['file']['size'];
+            }
         }
 
         $now = time();
-        $stmt = $db->prepare("
-            INSERT INTO annotations (project_id, page_url, author_name, author_email, comment, pos_x, pos_y, status, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
-        ");
-        $stmt->execute([
-            sanitize($body['project_id']),
-            sanitize($body['page_url']),
-            sanitize($body['author_name']),
-            sanitize($body['author_email'] ?? ''),
-            sanitize($body['comment']),
-            floatval($body['pos_x'] ?? 0),
-            floatval($body['pos_y'] ?? 0),
-            $now, $now
-        ]);
-
+        $stmt = $db->prepare("INSERT INTO annotations (project_id, page_url, author_name, author_email, author_token, comment, pos_x, pos_y, status, file_name, file_path, file_size, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'open',?,?,?,?,?)");
+        $stmt->execute([$project_id, $page_url, $author_name, $author_email, $author_token, $comment, $pos_x, $pos_y, $file_name, $file_path, $file_size, $now, $now]);
         $id = $db->lastInsertId();
+        addLog('create', $project_id, $author_name, "Annotation #$id sur $page_url");
         json_ok(['id' => $id, 'message' => 'Annotation créée'], 201);
         break;
 
     case 'PATCH':
         $body = json_decode(file_get_contents('php://input'), true);
         if (!$body || empty($body['id'])) json_error('id requis');
-
-        $id = intval($body['id']);
-        $allowed_status = ['open', 'resolved'];
+        $id     = intval($body['id']);
         $status = $body['status'] ?? 'open';
-        if (!in_array($status, $allowed_status)) json_error('Statut invalide');
-
+        if (!in_array($status, ['open', 'resolved'])) json_error('Statut invalide');
         $stmt = $db->prepare('UPDATE annotations SET status = ?, updated_at = ? WHERE id = ?');
         $stmt->execute([$status, time(), $id]);
-
         if ($stmt->rowCount() === 0) json_error('Annotation non trouvée', 404);
+        $actor = sanitize($body['actor'] ?? 'Dashboard');
+        addLog('status', '', $actor, "Annotation #$id → $status");
         json_ok(['message' => 'Statut mis à jour']);
         break;
 
     case 'DELETE':
-        $id = intval($_GET['id'] ?? 0);
+        $id    = intval($_GET['id'] ?? 0);
+        $token = $_GET['token'] ?? '';
         if (!$id) json_error('id requis');
-
-        $stmt = $db->prepare('DELETE FROM annotations WHERE id = ?');
+        if ($token) {
+            $stmt = $db->prepare('SELECT author_token, author_name FROM annotations WHERE id = ?');
+            $stmt->execute([$id]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) json_error('Annotation non trouvée', 404);
+            if ($row['author_token'] !== $token) json_error('Non autorisé', 403);
+        }
+        $stmt = $db->prepare('SELECT file_path, author_name, project_id FROM annotations WHERE id = ?');
         $stmt->execute([$id]);
-
-        if ($stmt->rowCount() === 0) json_error('Annotation non trouvée', 404);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && $row['file_path']) {
+            $f = UPLOAD_DIR . $row['file_path'];
+            if (file_exists($f)) unlink($f);
+        }
+        $db->prepare('DELETE FROM annotations WHERE id = ?')->execute([$id]);
+        addLog('delete', $row['project_id'] ?? '', $row['author_name'] ?? 'Dashboard', "Annotation #$id supprimée");
         json_ok(['message' => 'Annotation supprimée']);
         break;
 
@@ -129,7 +200,38 @@ switch ($method) {
         json_error('Méthode non supportée', 405);
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Fonctions ───────────────────────────────────────────────────────────────
+function getReplies($annotation_id) {
+    global $db;
+    $stmt = $db->prepare('SELECT * FROM replies WHERE annotation_id = ? ORDER BY created_at ASC');
+    $stmt->execute([$annotation_id]);
+    json_ok(['replies' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+}
+function getLogs() {
+    global $db;
+    $stmt = $db->query('SELECT * FROM logs ORDER BY created_at DESC LIMIT 200');
+    json_ok(['logs' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+}
+function serveFile($safe_name) {
+    $safe_name = basename($safe_name);
+    $path = UPLOAD_DIR . $safe_name;
+    if (!file_exists($path)) { http_response_code(404); echo 'Fichier non trouvé'; exit; }
+    global $db;
+    $stmt = $db->prepare('SELECT file_name FROM annotations WHERE file_path = ?');
+    $stmt->execute([$safe_name]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $original_name = $row ? $row['file_name'] : $safe_name;
+    header('Content-Type: application/octet-stream');
+    header('Content-Disposition: attachment; filename="' . addslashes($original_name) . '"');
+    header('Content-Length: ' . filesize($path));
+    readfile($path);
+    exit;
+}
+function addLog($action, $project_id, $author_name, $detail) {
+    global $db;
+    $db->prepare('INSERT INTO logs (action, project_id, author_name, detail, created_at) VALUES (?,?,?,?,?)')
+       ->execute([$action, $project_id, $author_name, $detail, time()]);
+}
 function sanitize($val) {
     return htmlspecialchars(strip_tags(trim((string)$val)), ENT_QUOTES, 'UTF-8');
 }
