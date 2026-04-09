@@ -3,15 +3,10 @@ define('DASHBOARD_PASSWORD', 'equinoxes2024');
 session_start();
 $auth_error = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['dashboard_pwd'])) {
-    if ($_POST['dashboard_pwd'] === DASHBOARD_PASSWORD) {
-        $_SESSION['uxnote_auth'] = true;
-    } else {
-        $auth_error = true;
-    }
+    if ($_POST['dashboard_pwd'] === DASHBOARD_PASSWORD) { $_SESSION['uxnote_auth'] = true; }
+    else { $auth_error = true; }
 }
-if (isset($_POST['logout'])) {
-    unset($_SESSION['uxnote_auth']);
-}
+if (isset($_POST['logout'])) { unset($_SESSION['uxnote_auth']); }
 $is_auth = !empty($_SESSION['uxnote_auth']);
 ?>
 <!DOCTYPE html>
@@ -32,7 +27,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     .login-logo { width:44px; height:44px; background:#3ce65f; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
     .login-box h1 { font-family:'Raleway',sans-serif; font-size:20px; color:#222339; margin-bottom:6px; }
     .login-box p { font-size:13px; color:#757686; margin-bottom:24px; }
-    .login-box input { width:100%; padding:11px 14px; border:1px solid #e2e4ef; border-radius:8px; font-size:14px; margin-bottom:12px; outline:none; text-align:center; letter-spacing:0.08em; font-family:'Montserrat',sans-serif; }
+    .login-box input[type=password] { width:100%; padding:11px 14px; border:1px solid #e2e4ef; border-radius:8px; font-size:14px; margin-bottom:12px; outline:none; text-align:center; letter-spacing:0.08em; font-family:'Montserrat',sans-serif; }
     .login-box input:focus { border-color:#3ce65f; }
     .login-box button { width:100%; padding:11px; background:#222339; color:#fff; border:none; border-radius:8px; cursor:pointer; font-size:14px; font-weight:600; font-family:'Montserrat',sans-serif; border-left:3px solid #3ce65f; }
     .login-box button:hover { background:#2d2f4a; }
@@ -52,36 +47,44 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     .tab-btn { padding:8px 18px; border-radius:7px; border:none; cursor:pointer; font-size:13px; font-weight:600; background:transparent; color:#757686; font-family:'Montserrat',sans-serif; transition:all 0.15s; }
     .tab-btn.active { background:#222339; color:#fff; }
     .tab-btn:hover:not(.active) { background:#f4f5f7; color:#222339; }
+    .tab-btn.archive-tab.active { background:#757686; }
     .tab-content { display:none; }
     .tab-content.active { display:block; }
 
     /* ── Stats ── */
     .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
     .stat-card { background:#fff; border-radius:12px; padding:20px 22px; box-shadow:0 1px 6px rgba(34,35,57,0.07); border-top:3px solid transparent; }
-    .stat-card.c1 { border-top-color:#222339; } .stat-card.c2 { border-top-color:#f59e0b; }
-    .stat-card.c3 { border-top-color:#3ce65f; } .stat-card.c4 { border-top-color:#757686; }
+    .stat-card.c1{border-top-color:#222339} .stat-card.c2{border-top-color:#f59e0b}
+    .stat-card.c3{border-top-color:#3ce65f} .stat-card.c4{border-top-color:#757686}
     .stat-label { font-size:11px; color:#757686; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px; font-weight:500; }
     .stat-value { font-size:30px; font-weight:700; font-family:'Raleway',sans-serif; }
-    .stat-card.c1 .stat-value { color:#222339; } .stat-card.c2 .stat-value { color:#d97706; }
-    .stat-card.c3 .stat-value { color:#2ab54a; } .stat-card.c4 .stat-value { color:#757686; }
+    .stat-card.c1 .stat-value{color:#222339} .stat-card.c2 .stat-value{color:#d97706}
+    .stat-card.c3 .stat-value{color:#2ab54a} .stat-card.c4 .stat-value{color:#757686}
 
     /* ── Toolbar ── */
     .toolbar { background:#fff; border-radius:12px; padding:14px 20px; box-shadow:0 1px 6px rgba(34,35,57,0.07); margin-bottom:20px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
     .toolbar input, .toolbar select { padding:9px 13px; border:1px solid #e2e4ef; border-radius:8px; font-size:13px; background:#f8f9fc; outline:none; color:#222339; font-family:'Montserrat',sans-serif; transition:border-color 0.15s; }
+    .toolbar input[type=date] { padding:8px 10px; }
     .toolbar input:focus, .toolbar select:focus { border-color:#3ce65f; }
-    .toolbar input { flex:1; min-width:180px; }
+    .toolbar input[type=text] { flex:1; min-width:180px; }
+    .toolbar-sep { width:1px; height:28px; background:#e2e4ef; }
+    .toolbar-label { font-size:12px; color:#757686; font-weight:500; white-space:nowrap; }
 
     /* ── Boutons ── */
     .btn { padding:8px 16px; border-radius:8px; border:none; cursor:pointer; font-size:13px; font-weight:600; transition:all 0.15s; font-family:'Montserrat',sans-serif; }
     .btn-primary { background:#222339; color:#fff; border-left:2px solid #3ce65f; }
-    .btn-accent { background:#3ce65f; color:#222339; } .btn-accent:hover { background:#2ab54a; color:#fff; }
-    .btn-danger { background:#fee2e2; color:#dc2626; } .btn-danger:hover { background:#fecaca; }
+    .btn-accent  { background:#3ce65f; color:#222339; } .btn-accent:hover  { background:#2ab54a; color:#fff; }
+    .btn-danger  { background:#fee2e2; color:#dc2626; } .btn-danger:hover  { background:#fecaca; }
     .btn-success { background:#dcfce7; color:#16a34a; } .btn-success:hover { background:#bbf7d0; }
-    .btn-ghost { background:#f1f3f9; color:#757686; } .btn-ghost:hover { background:#e2e5f0; color:#222339; }
+    .btn-ghost   { background:#f1f3f9; color:#757686; } .btn-ghost:hover   { background:#e2e5f0; color:#222339; }
     .btn-outline { background:transparent; color:#fff; border:1px solid rgba(255,255,255,0.3); }
     .btn-outline:hover { background:rgba(255,255,255,0.1); }
     .btn-download { background:#f0f9f1; color:#2ab54a; border:1px solid #c7f0d2; }
     .btn-download:hover { background:#dcfce7; }
+    .btn-archive  { background:#f0f1f8; color:#3d3f5a; border:1px solid #c8cadf; }
+    .btn-archive:hover { background:#e2e4ef; }
+    .btn-unarchive { background:#fff8e6; color:#b45309; border:1px solid #fde68a; }
+    .btn-unarchive:hover { background:#fef3c7; }
 
     /* ── Table ── */
     .table-wrap { background:#fff; border-radius:12px; box-shadow:0 1px 6px rgba(34,35,57,0.07); overflow:hidden; }
@@ -93,10 +96,12 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     tbody tr.detail-row.open { display:table-row; }
     tbody td { padding:13px 16px; font-size:13px; vertical-align:top; }
     .badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; }
-    .badge.open { background:#e8eaf6; color:#222339; }
+    .badge.open     { background:#e8eaf6; color:#222339; }
     .badge.resolved { background:#dcfce7; color:#15803d; }
+    .badge.archived { background:#f0f1f8; color:#757686; }
     .project-tag { background:#f0f9f1; color:#222339; padding:3px 9px; border-radius:5px; font-size:12px; font-weight:600; border-left:3px solid #3ce65f; display:inline-block; }
-    .comment-preview { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+    .project-tag.archived { border-left-color:#757686; background:#f4f5f7; color:#757686; }
+    .comment-preview { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .reply-count { font-size:11px; color:#757686; margin-top:3px; }
     .url-link { color:#222339; text-decoration:none; font-size:12px; font-weight:500; }
     .url-link:hover { color:#3ce65f; }
@@ -104,42 +109,44 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     .expand-btn { background:none; border:none; cursor:pointer; color:#757686; font-size:16px; padding:0 4px; transition:transform 0.2s; }
     .expand-btn.open { transform:rotate(90deg); }
 
-    /* ── Détail ligne dépliée ── */
+    /* ── Détail ── */
     .detail-cell { padding:0 !important; }
     .detail-inner { padding:16px 20px 16px 48px; }
     .detail-comment { font-size:14px; color:#222339; line-height:1.6; margin-bottom:12px; background:#fff; padding:12px 14px; border-radius:8px; border-left:3px solid #222339; }
-    .detail-replies { margin-top:10px; }
     .detail-replies h4 { font-size:12px; text-transform:uppercase; letter-spacing:0.05em; color:#757686; margin-bottom:8px; font-weight:600; }
     .reply-item { background:#fff; border-radius:8px; padding:10px 14px; margin-bottom:6px; border-left:3px solid #3ce65f; }
     .reply-meta { font-size:11px; color:#757686; margin-bottom:4px; }
     .reply-meta strong { color:#222339; }
     .reply-text { font-size:13px; color:#222339; }
 
-    /* ── Empty ── */
+    /* ── Projets (onglet archives) ── */
+    .projects-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:16px; }
+    .project-card { background:#fff; border-radius:12px; padding:18px 20px; box-shadow:0 1px 6px rgba(34,35,57,0.07); border-left:4px solid #3ce65f; }
+    .project-card.archived { border-left-color:#757686; opacity:0.8; }
+    .project-card-title { font-family:'Raleway',sans-serif; font-size:15px; font-weight:700; color:#222339; margin-bottom:6px; }
+    .project-card-meta { font-size:12px; color:#757686; margin-bottom:12px; }
+    .project-card-actions { display:flex; gap:8px; }
+
+    /* ── Logs ── */
+    .log-filters { background:#fff; border-radius:12px; padding:14px 20px; box-shadow:0 1px 6px rgba(34,35,57,0.07); margin-bottom:20px; display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .log-item { display:flex; gap:12px; align-items:flex-start; padding:12px 16px; border-bottom:1px solid #f4f5f7; font-size:13px; }
+    .log-item:last-child { border-bottom:none; }
+    .log-icon { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+    .log-icon.create   { background:#e8eaf6; } .log-icon.delete   { background:#fee2e2; }
+    .log-icon.status   { background:#dcfce7; } .log-icon.reply    { background:#fef3c7; }
+    .log-icon.archive  { background:#f0f1f8; } .log-icon.unarchive{ background:#fff8e6; }
+    .log-detail strong { color:#222339; }
+    .log-time { font-size:11px; color:#757686; margin-top:2px; }
+
+    /* ── Empty / pagination / toast / snippet ── */
     .empty-state { text-align:center; padding:60px 20px; color:#757686; }
     .empty-state h3 { font-family:'Raleway',sans-serif; font-size:16px; margin-bottom:8px; }
-
-    /* ── Pagination ── */
     .pagination { display:flex; justify-content:center; gap:6px; margin-top:20px; }
     .pagination button { padding:7px 13px; border:1px solid #e2e4ef; border-radius:8px; background:#fff; cursor:pointer; font-size:13px; font-family:'Montserrat',sans-serif; }
     .pagination button.active { background:#222339; color:#fff; border-color:#222339; }
     .pagination button:disabled { opacity:0.4; cursor:default; }
-
-    /* ── Logs ── */
-    .log-item { display:flex; gap:12px; align-items:flex-start; padding:12px 16px; border-bottom:1px solid #f4f5f7; font-size:13px; }
-    .log-item:last-child { border-bottom:none; }
-    .log-icon { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
-    .log-icon.create { background:#e8eaf6; } .log-icon.delete { background:#fee2e2; }
-    .log-icon.status { background:#dcfce7; } .log-icon.reply  { background:#fef3c7; }
-    .log-detail { flex:1; }
-    .log-detail strong { color:#222339; }
-    .log-time { font-size:11px; color:#757686; margin-top:2px; }
-
-    /* ── Toast ── */
     #toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#222339; color:#fff; padding:11px 22px; border-radius:8px; font-size:13px; opacity:0; transition:opacity 0.3s; pointer-events:none; z-index:9999; border-left:3px solid #3ce65f; }
     #toast.show { opacity:1; }
-
-    /* ── Modal snippet ── */
     #snippet-modal { position:fixed; inset:0; background:rgba(34,35,57,0.5); z-index:9998; display:none; align-items:center; justify-content:center; }
     #snippet-modal.open { display:flex; }
     #snippet-modal-box { background:#fff; border-radius:14px; padding:28px; width:600px; max-width:95vw; box-shadow:0 20px 60px rgba(34,35,57,0.25); border-top:4px solid #3ce65f; }
@@ -148,9 +155,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     .pwd-option { display:flex; gap:10px; margin:12px 0; align-items:center; font-size:13px; }
     .pwd-option input[type=checkbox] { width:16px; height:16px; accent-color:#3ce65f; }
     .pwd-option input[type=text] { flex:1; padding:8px 12px; border:1px solid #e2e4ef; border-radius:6px; font-size:13px; outline:none; }
-    .pwd-option input[type=text]:focus { border-color:#3ce65f; }
-
-    @media (max-width:640px) { .container { padding:16px; } .header { padding:0 16px; } }
+    @media (max-width:640px) { .container{padding:16px} .header{padding:0 16px} }
   </style>
 </head>
 <body>
@@ -163,9 +168,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     </div>
     <h1>UX Note Cloud</h1>
     <p>Relecture collaborative — Équinoxes</p>
-    <?php if ($auth_error): ?>
-      <div class="login-error">Mot de passe incorrect</div>
-    <?php endif; ?>
+    <?php if ($auth_error): ?><div class="login-error">Mot de passe incorrect</div><?php endif; ?>
     <form method="POST">
       <input type="password" name="dashboard_pwd" placeholder="Mot de passe" autofocus />
       <button type="submit">Accéder au dashboard</button>
@@ -194,22 +197,24 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
 
 <div class="container">
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('annotations',this)">📋 Annotations</button>
-    <button class="tab-btn" onclick="switchTab('logs',this)">📜 Journal</button>
+    <button class="tab-btn active"   onclick="switchTab('annotations',this)">📋 Annotations</button>
+    <button class="tab-btn"          onclick="switchTab('logs',this)">📜 Journal</button>
+    <button class="tab-btn archive-tab" onclick="switchTab('archives',this)">📦 Archives</button>
   </div>
 
+  <!-- ── TAB ANNOTATIONS ── -->
   <div id="tab-annotations" class="tab-content active">
     <div class="stats">
       <div class="stat-card c1"><div class="stat-label">Total</div><div class="stat-value" id="stat-total">—</div></div>
       <div class="stat-card c2"><div class="stat-label">En cours</div><div class="stat-value" id="stat-open">—</div></div>
       <div class="stat-card c3"><div class="stat-label">Résolues</div><div class="stat-value" id="stat-resolved">—</div></div>
-      <div class="stat-card c4"><div class="stat-label">Projets</div><div class="stat-value" id="stat-projects">—</div></div>
+      <div class="stat-card c4"><div class="stat-label">Projets actifs</div><div class="stat-value" id="stat-projects">—</div></div>
     </div>
     <div class="toolbar">
       <input type="text" id="filter-text" placeholder="🔍 Rechercher..." oninput="applyFilters()" />
       <select id="filter-project" onchange="applyFilters()"><option value="">Tous les projets</option></select>
-      <select id="filter-author" onchange="applyFilters()"><option value="">Tous les auteurs</option></select>
-      <select id="filter-status" onchange="applyFilters()">
+      <select id="filter-author"  onchange="applyFilters()"><option value="">Tous les auteurs</option></select>
+      <select id="filter-status"  onchange="applyFilters()">
         <option value="">Tous les statuts</option>
         <option value="open">En cours</option>
         <option value="resolved">Résolus</option>
@@ -219,11 +224,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     <div class="table-wrap">
       <table>
         <thead>
-          <tr>
-            <th style="width:32px"></th>
-            <th>#</th><th>Projet</th><th>Page</th><th>Auteur</th>
-            <th>Commentaire</th><th>Fichier</th><th>Statut</th><th>Date</th><th>Actions</th>
-          </tr>
+          <tr><th style="width:32px"></th><th>#</th><th>Projet</th><th>Page</th><th>Auteur</th><th>Commentaire</th><th>Fichier</th><th>Statut</th><th>Date</th><th>Actions</th></tr>
         </thead>
         <tbody id="table-body">
           <tr><td colspan="10"><div class="empty-state"><p>Chargement…</p></div></td></tr>
@@ -233,9 +234,57 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     <div class="pagination" id="pagination"></div>
   </div>
 
+  <!-- ── TAB JOURNAL ── -->
   <div id="tab-logs" class="tab-content">
+    <div class="log-filters toolbar">
+      <span class="toolbar-label">Période :</span>
+      <input type="date" id="log-date-from" onchange="loadLogs()" />
+      <span class="toolbar-label">→</span>
+      <input type="date" id="log-date-to" onchange="loadLogs()" />
+      <button class="btn btn-ghost" onclick="clearLogDates()">✕ Effacer</button>
+      <button class="btn btn-ghost" onclick="loadLogs()">↻ Actualiser</button>
+    </div>
     <div class="table-wrap">
       <div id="logs-body"><div class="empty-state"><p>Chargement…</p></div></div>
+    </div>
+  </div>
+
+  <!-- ── TAB ARCHIVES ── -->
+  <div id="tab-archives" class="tab-content">
+    <div class="toolbar" style="margin-bottom:24px">
+      <input type="text" id="archive-search" placeholder="🔍 Rechercher dans les archives..." oninput="filterArchives()" />
+      <select id="archive-view" onchange="renderArchiveView()">
+        <option value="annotations">Annotations archivées</option>
+        <option value="projects">Projets</option>
+        <option value="logs">Journal archivé</option>
+      </select>
+      <button class="btn btn-ghost" onclick="loadArchives()">↻ Actualiser</button>
+    </div>
+
+    <!-- Vue annotations archivées -->
+    <div id="archive-annotations-view">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th style="width:32px"></th><th>#</th><th>Projet</th><th>Page</th><th>Auteur</th><th>Commentaire</th><th>Statut</th><th>Date</th></tr>
+          </thead>
+          <tbody id="archive-table-body">
+            <tr><td colspan="8"><div class="empty-state"><p>Chargement…</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Vue projets -->
+    <div id="archive-projects-view" style="display:none">
+      <div id="projects-grid" class="projects-grid"></div>
+    </div>
+
+    <!-- Vue logs archivés -->
+    <div id="archive-logs-view" style="display:none">
+      <div class="table-wrap">
+        <div id="archive-logs-body"><div class="empty-state"><p>Chargement…</p></div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -248,7 +297,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     <p style="color:#757686;font-size:13px">Ajoutez ce snippet via WPCode juste avant &lt;/body&gt; :</p>
     <div class="pwd-option">
       <input type="checkbox" id="use-pwd" onchange="updateSnippet()">
-      <label for="use-pwd" style="font-weight:500">Activer un mot de passe sur ce site</label>
+      <label for="use-pwd" style="font-weight:500">Activer un mot de passe</label>
       <input type="text" id="pwd-value" placeholder="ex: moncode" oninput="updateSnippet()" style="display:none">
     </div>
     <pre id="snippet-code"></pre>
@@ -262,10 +311,11 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
 <script>
   const API      = './api/annotations.php';
   const BASE_URL = window.location.origin + window.location.pathname.replace('index.php','').replace(/\/$/, '');
-  let allAnnotations = [], filtered = [];
+  let allAnnotations = [], filtered = [], allProjects = [], archivedAnnotations = [], allArchiveLogs = [];
   const PER_PAGE = 25;
   let currentPage = 1;
 
+  // ── Chargement actif ──
   async function loadAll() {
     try {
       const res  = await fetch(`${API}?all=1`);
@@ -275,11 +325,27 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     updateStats(); populateFilters(); applyFilters();
   }
 
+  // ── Chargement archives ──
+  async function loadArchives() {
+    try {
+      const [resA, resP, resL] = await Promise.all([
+        fetch(`${API}?all=1&archived=1`),
+        fetch(`${API}?projects=1`),
+        fetch(`${API}?logs=1&archived=1`)
+      ]);
+      const [dA, dP, dL] = await Promise.all([resA.json(), resP.json(), resL.json()]);
+      archivedAnnotations = dA.annotations || [];
+      allProjects         = dP.projects    || [];
+      allArchiveLogs      = dL.logs        || [];
+    } catch(e) {}
+    renderArchiveView();
+  }
+
   function updateStats() {
     const total    = allAnnotations.length;
-    const open     = allAnnotations.filter(a => a.status==='open').length;
-    const resolved = allAnnotations.filter(a => a.status==='resolved').length;
-    const projects = new Set(allAnnotations.map(a => a.project_id)).size;
+    const open     = allAnnotations.filter(a=>a.status==='open').length;
+    const resolved = allAnnotations.filter(a=>a.status==='resolved').length;
+    const projects = new Set(allAnnotations.map(a=>a.project_id)).size;
     document.getElementById('stat-total').textContent    = total;
     document.getElementById('stat-open').textContent     = open;
     document.getElementById('stat-resolved').textContent = resolved;
@@ -287,19 +353,13 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   }
 
   function populateFilters() {
-    // Projets
-    const projects = [...new Set(allAnnotations.map(a => a.project_id))].sort();
+    const projects = [...new Set(allAnnotations.map(a=>a.project_id))].sort();
+    const authors  = [...new Set(allAnnotations.map(a=>a.author_name))].sort();
     const selP = document.getElementById('filter-project');
-    const curP = selP.value;
-    selP.innerHTML = '<option value="">Tous les projets</option>' +
-      projects.map(p => `<option value="${esc(p)}" ${p===curP?'selected':''}>${esc(p)}</option>`).join('');
-
-    // Auteurs — NOUVEAU FILTRE
-    const authors = [...new Set(allAnnotations.map(a => a.author_name))].sort();
     const selA = document.getElementById('filter-author');
-    const curA = selA.value;
-    selA.innerHTML = '<option value="">Tous les auteurs</option>' +
-      authors.map(a => `<option value="${esc(a)}" ${a===curA?'selected':''}>${esc(a)}</option>`).join('');
+    const curP = selP.value, curA = selA.value;
+    selP.innerHTML = '<option value="">Tous les projets</option>' + projects.map(p=>`<option value="${esc(p)}" ${p===curP?'selected':''}>${esc(p)}</option>`).join('');
+    selA.innerHTML = '<option value="">Tous les auteurs</option>'  + authors.map(a=>`<option value="${esc(a)}" ${a===curA?'selected':''}>${esc(a)}</option>`).join('');
   }
 
   function applyFilters() {
@@ -308,9 +368,9 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     const author  = document.getElementById('filter-author').value;
     const status  = document.getElementById('filter-status').value;
     filtered = allAnnotations.filter(a => {
-      if (project && a.project_id   !== project) return false;
-      if (author  && a.author_name  !== author)  return false;
-      if (status  && a.status       !== status)  return false;
+      if (project && a.project_id  !== project) return false;
+      if (author  && a.author_name !== author)  return false;
+      if (status  && a.status      !== status)  return false;
       if (text && !a.comment.toLowerCase().includes(text) &&
           !a.author_name.toLowerCase().includes(text) &&
           !a.page_url.toLowerCase().includes(text)) return false;
@@ -322,43 +382,32 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   function renderTable() {
     const tbody = document.getElementById('table-body');
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><h3>Aucune annotation trouvée</h3><p>Ajoutez le script sur vos sites pour collecter du feedback.</p></div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><h3>Aucune annotation</h3><p>Ajoutez le script sur vos sites pour collecter du feedback.</p></div></td></tr>`;
       return;
     }
-    const start = (currentPage-1) * PER_PAGE;
+    const start = (currentPage-1)*PER_PAGE;
     const page  = filtered.slice(start, start+PER_PAGE);
-
     let html = '';
-    page.forEach((a, i) => {
-      const replies     = a.replies || [];
-      const replyCount  = a.reply_count || replies.length;
-      const hasDetail   = a.comment.length > 60 || replyCount > 0 || a.file_name;
-      const rowId       = `row-${a.id}`;
-
-      // Ligne principale
+    page.forEach((a,i) => {
+      const replies    = a.replies || [];
+      const replyCount = a.reply_count || replies.length;
+      const hasDetail  = a.comment.length > 60 || replyCount > 0 || a.file_name;
+      const rowId      = `row-${a.id}`;
       html += `
-        <tr class="main-row" onclick="${hasDetail?`toggleDetail('${rowId}')`:''}" title="${hasDetail?'Cliquer pour voir le détail':''}">
-          <td>
-            ${hasDetail
-              ? `<button class="expand-btn" id="btn-${rowId}" onclick="event.stopPropagation();toggleDetail('${rowId}')">›</button>`
-              : ''}
-          </td>
+        <tr class="main-row" onclick="${hasDetail?`toggleDetail('${rowId}')`:''}" >
+          <td>${hasDetail?`<button class="expand-btn" id="btn-${rowId}" onclick="event.stopPropagation();toggleDetail('${rowId}')">›</button>`:''}</td>
           <td style="color:#757686;font-size:12px">${start+i+1}</td>
           <td><span class="project-tag">${esc(a.project_id)}</span></td>
-          <td><a class="url-link" href="${esc(a.page_url)}" target="_blank" onclick="event.stopPropagation()" title="${esc(a.page_url)}">${shortUrl(a.page_url)}</a></td>
+          <td><a class="url-link" href="${esc(a.page_url)}" target="_blank" onclick="event.stopPropagation()">${shortUrl(a.page_url)}</a></td>
           <td>
-            <div style="font-weight:600;font-size:13px">${esc(a.author_name)}</div>
+            <div style="font-weight:600">${esc(a.author_name)}</div>
             ${a.author_email?`<div style="font-size:11px;color:#757686">${esc(a.author_email)}</div>`:''}
           </td>
           <td>
             <div class="comment-preview" title="${esc(a.comment)}">${esc(a.comment)}</div>
             ${replyCount>0?`<div class="reply-count">↩ ${replyCount} réponse${replyCount>1?'s':''}</div>`:''}
           </td>
-          <td>
-            ${a.file_name
-              ?`<button class="btn btn-download" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();downloadFile('${esc(a.file_path)}')">⬇ ${esc(a.file_name.length>12?a.file_name.substring(0,12)+'…':a.file_name)}</button>`
-              :'<span style="color:#e2e4ef">—</span>'}
-          </td>
+          <td>${a.file_name?`<button class="btn btn-download" style="padding:4px 10px;font-size:11px" onclick="event.stopPropagation();downloadFile('${esc(a.file_path)}')">⬇ ${esc(a.file_name.length>12?a.file_name.substring(0,12)+'…':a.file_name)}</button>`:'<span style="color:#e2e4ef">—</span>'}</td>
           <td><span class="badge ${a.status}">${a.status==='resolved'?'✓ Résolu':'● En cours'}</span></td>
           <td style="font-size:12px;color:#757686;white-space:nowrap">${formatDate(a.created_at)}</td>
           <td onclick="event.stopPropagation()">
@@ -366,25 +415,23 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
               ${a.status!=='resolved'
                 ?`<button class="btn btn-success" style="padding:4px 9px;font-size:11px" onclick="resolve(${a.id})">✓</button>`
                 :`<button class="btn btn-ghost"   style="padding:4px 9px;font-size:11px" onclick="unresolve(${a.id})">↩</button>`}
-              <button class="btn btn-danger" style="padding:4px 9px;font-size:11px" onclick="deleteA(${a.id})">🗑</button>
+              <button class="btn btn-danger"  style="padding:4px 9px;font-size:11px" onclick="deleteA(${a.id})">🗑</button>
+              <button class="btn btn-archive" style="padding:4px 9px;font-size:11px" onclick="archiveProject('${esc(a.project_id)}')" title="Archiver le projet ${esc(a.project_id)}">📦</button>
             </div>
           </td>
         </tr>`;
-
-      // Ligne détail dépliable
       if (hasDetail) {
-        const repliesHtml = replies.map(r => `
+        const repliesHtml = replies.map(r=>`
           <div class="reply-item">
-            <div class="reply-meta"><strong>${esc(r.author_name)}</strong>${r.author_email?' · '+esc(r.author_email):''} · ${formatDate(r.created_at)}</div>
+            <div class="reply-meta"><strong>${esc(r.author_name)}</strong> · ${formatDate(r.created_at)}</div>
             <div class="reply-text">${esc(r.comment)}</div>
           </div>`).join('');
-
         html += `
           <tr class="detail-row" id="${rowId}">
             <td class="detail-cell" colspan="10">
               <div class="detail-inner">
                 <div class="detail-comment">${esc(a.comment)}</div>
-                ${a.file_name?`<div style="margin-bottom:10px"><button class="btn btn-download" style="font-size:12px" onclick="downloadFile('${esc(a.file_path)}')">⬇ Télécharger : ${esc(a.file_name)}</button></div>`:''}
+                ${a.file_name?`<div style="margin-bottom:10px"><button class="btn btn-download" style="font-size:12px" onclick="downloadFile('${esc(a.file_path)}')">⬇ ${esc(a.file_name)}</button></div>`:''}
                 ${repliesHtml?`<div class="detail-replies"><h4>↩ Réponses (${replies.length})</h4>${repliesHtml}</div>`:''}
               </div>
             </td>
@@ -395,10 +442,8 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   }
 
   function toggleDetail(rowId) {
-    const row = document.getElementById(rowId);
-    const btn = document.getElementById('btn-' + rowId);
-    if (row) row.classList.toggle('open');
-    if (btn) btn.classList.toggle('open');
+    document.getElementById(rowId)?.classList.toggle('open');
+    document.getElementById('btn-'+rowId)?.classList.toggle('open');
   }
 
   function renderPagination() {
@@ -412,6 +457,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   }
   function goPage(p) { currentPage=p; renderTable(); renderPagination(); window.scrollTo(0,0); }
 
+  // ── Actions annotations ──
   async function resolve(id)   { await patch(id,'resolved'); toast('✓ Annotation résolue'); }
   async function unresolve(id) { await patch(id,'open');     toast('↩ Annotation réouverte'); }
   async function patch(id, status) {
@@ -421,23 +467,149 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     updateStats(); applyFilters();
   }
   async function deleteA(id) {
-    if (!confirm('Supprimer cette annotation définitivement ?')) return;
+    if (!confirm('Supprimer définitivement ?')) return;
     await fetch(`${API}?id=${id}`, {method:'DELETE'});
     allAnnotations = allAnnotations.filter(a=>a.id!=id);
     updateStats(); populateFilters(); applyFilters();
     toast('🗑 Annotation supprimée');
   }
-  function downloadFile(filePath) {
-    window.location.href = `${API}?download=${encodeURIComponent(filePath)}`;
+  function downloadFile(fp) { window.location.href = `${API}?download=${encodeURIComponent(fp)}`; }
+
+  // ── Archivage ──
+  async function archiveProject(projectId) {
+    if (!confirm(`Archiver le projet "${projectId}" ?\nLe widget disparaîtra sur les sites concernés.`)) return;
+    await fetch(`${API}?archive=1`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({project_id:projectId})});
+    toast(`📦 Projet "${projectId}" archivé`);
+    await loadAll();
+  }
+  async function unarchiveProject(projectId) {
+    if (!confirm(`Réouvrir le projet "${projectId}" ?`)) return;
+    await fetch(`${API}?unarchive=1`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({project_id:projectId})});
+    toast(`✅ Projet "${projectId}" réouvert`);
+    await loadArchives();
+    await loadAll();
   }
 
+  // ── Vue archives ──
+  function renderArchiveView() {
+    const view = document.getElementById('archive-view').value;
+    document.getElementById('archive-annotations-view').style.display = view==='annotations' ? 'block' : 'none';
+    document.getElementById('archive-projects-view').style.display    = view==='projects'    ? 'block' : 'none';
+    document.getElementById('archive-logs-view').style.display        = view==='logs'        ? 'block' : 'none';
+
+    if (view === 'annotations') renderArchivedAnnotations();
+    if (view === 'projects')    renderProjectsGrid();
+    if (view === 'logs')        renderArchivedLogs();
+  }
+
+  function filterArchives() {
+    renderArchiveView();
+  }
+
+  function renderArchivedAnnotations() {
+    const search = document.getElementById('archive-search').value.toLowerCase();
+    const list   = archivedAnnotations.filter(a =>
+      !search || a.comment.toLowerCase().includes(search) ||
+      a.author_name.toLowerCase().includes(search) ||
+      a.project_id.toLowerCase().includes(search)
+    );
+    const tbody = document.getElementById('archive-table-body');
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><h3>Aucune annotation archivée</h3></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map((a,i) => {
+      const replies    = a.replies || [];
+      const replyCount = a.reply_count || replies.length;
+      const rowId      = `arch-row-${a.id}`;
+      const hasDetail  = a.comment.length > 60 || replyCount > 0;
+      let html = `
+        <tr class="main-row" onclick="${hasDetail?`toggleDetail('${rowId}')`:''}" style="opacity:0.85">
+          <td>${hasDetail?`<button class="expand-btn" id="btn-${rowId}" onclick="event.stopPropagation();toggleDetail('${rowId}')">›</button>`:''}</td>
+          <td style="color:#757686;font-size:12px">${i+1}</td>
+          <td><span class="project-tag archived">${esc(a.project_id)}</span></td>
+          <td><a class="url-link" href="${esc(a.page_url)}" target="_blank" onclick="event.stopPropagation()">${shortUrl(a.page_url)}</a></td>
+          <td><div style="font-weight:600">${esc(a.author_name)}</div></td>
+          <td>
+            <div class="comment-preview">${esc(a.comment)}</div>
+            ${replyCount>0?`<div class="reply-count">↩ ${replyCount} réponse${replyCount>1?'s':''}</div>`:''}
+          </td>
+          <td><span class="badge ${a.status}">${a.status==='resolved'?'✓ Résolu':'● En cours'}</span></td>
+          <td style="font-size:12px;color:#757686;white-space:nowrap">${formatDate(a.created_at)}</td>
+        </tr>`;
+      if (hasDetail) {
+        const repliesHtml = replies.map(r=>`
+          <div class="reply-item">
+            <div class="reply-meta"><strong>${esc(r.author_name)}</strong> · ${formatDate(r.created_at)}</div>
+            <div class="reply-text">${esc(r.comment)}</div>
+          </div>`).join('');
+        html += `
+          <tr class="detail-row" id="${rowId}">
+            <td class="detail-cell" colspan="8">
+              <div class="detail-inner">
+                <div class="detail-comment">${esc(a.comment)}</div>
+                ${repliesHtml?`<div class="detail-replies"><h4>↩ Réponses</h4>${repliesHtml}</div>`:''}
+              </div>
+            </td>
+          </tr>`;
+      }
+      return html;
+    }).join('');
+  }
+
+  function renderProjectsGrid() {
+    const search = document.getElementById('archive-search').value.toLowerCase();
+    const list   = allProjects.filter(p => !search || p.project_id.toLowerCase().includes(search));
+    const grid   = document.getElementById('projects-grid');
+    if (list.length === 0) {
+      grid.innerHTML = '<div class="empty-state"><h3>Aucun projet</h3></div>'; return;
+    }
+    grid.innerHTML = list.map(p => `
+      <div class="project-card ${p.status==='archived'?'archived':''}">
+        <div class="project-card-title">${esc(p.project_id)}</div>
+        <div class="project-card-meta">
+          ${p.annotation_count} annotation${p.annotation_count!=1?'s':''}
+          · ${p.status==='archived'?'Archivé le '+formatDate(p.archived_at):'Actif'}
+        </div>
+        <div class="project-card-actions">
+          ${p.status==='active'
+            ?`<button class="btn btn-archive" onclick="archiveProject('${esc(p.project_id)}')">📦 Archiver</button>`
+            :`<button class="btn btn-unarchive" onclick="unarchiveProject('${esc(p.project_id)}')">↩ Réouvrir</button>`}
+        </div>
+      </div>`).join('');
+  }
+
+  function renderArchivedLogs() {
+    const search = document.getElementById('archive-search').value.toLowerCase();
+    const list   = allArchiveLogs.filter(l => !search || l.detail.toLowerCase().includes(search) || l.author_name.toLowerCase().includes(search));
+    const icons  = {create:'➕', delete:'🗑', status:'✓', reply:'↩', archive:'📦', unarchive:'↩'};
+    const labels = {create:'Création', delete:'Suppression', status:'Statut', reply:'Réponse', archive:'Archivage', unarchive:'Réouverture'};
+    document.getElementById('archive-logs-body').innerHTML = list.length===0
+      ? '<div class="empty-state"><h3>Aucun log archivé</h3></div>'
+      : list.map(l=>`
+        <div class="log-item">
+          <div class="log-icon ${l.action}">${icons[l.action]||'·'}</div>
+          <div class="log-detail">
+            <strong>${esc(l.author_name||'Système')}</strong> — ${labels[l.action]||l.action}
+            ${l.detail?`<br><span style="color:#757686;font-size:12px">${esc(l.detail)}</span>`:''}
+            <div class="log-time">${formatDate(l.created_at)}</div>
+          </div>
+        </div>`).join('');
+  }
+
+  // ── Journal ──
   async function loadLogs() {
+    const from = document.getElementById('log-date-from').value;
+    const to   = document.getElementById('log-date-to').value;
+    let url    = `${API}?logs=1`;
+    if (from) url += `&date_from=${Math.floor(new Date(from).getTime()/1000)}`;
+    if (to)   url += `&date_to=${Math.floor(new Date(to).getTime()/1000)}`;
     try {
-      const res  = await fetch(`${API}?logs=1`);
+      const res  = await fetch(url);
       const data = await res.json();
       const logs = data.logs || [];
-      const icons  = {create:'➕', delete:'🗑', status:'✓', reply:'↩'};
-      const labels = {create:'Création', delete:'Suppression', status:'Statut modifié', reply:'Réponse'};
+      const icons  = {create:'➕', delete:'🗑', status:'✓', reply:'↩', archive:'📦', unarchive:'↩'};
+      const labels = {create:'Création', delete:'Suppression', status:'Statut modifié', reply:'Réponse', archive:'Projet archivé', unarchive:'Projet réouvert'};
       document.getElementById('logs-body').innerHTML = logs.length===0
         ? '<div class="empty-state"><h3>Aucune activité</h3></div>'
         : logs.map(l=>`
@@ -452,14 +624,23 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     } catch(e) {}
   }
 
+  function clearLogDates() {
+    document.getElementById('log-date-from').value = '';
+    document.getElementById('log-date-to').value   = '';
+    loadLogs();
+  }
+
+  // ── Tabs ──
   function switchTab(name, btn) {
     document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('tab-'+name).classList.add('active');
     btn.classList.add('active');
-    if (name==='logs') loadLogs();
+    if (name==='logs')     loadLogs();
+    if (name==='archives') loadArchives();
   }
 
+  // ── Snippet ──
   function openSnippetModal() {
     document.getElementById('snippet-modal').classList.add('open');
     document.getElementById('use-pwd').checked = false;
@@ -471,8 +652,8 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     const usePwd = document.getElementById('use-pwd').checked;
     const pwdEl  = document.getElementById('pwd-value');
     pwdEl.style.display = usePwd ? 'block' : 'none';
-    const pwd    = usePwd && pwdEl.value ? `\n  data-password="${pwdEl.value}"` : '';
-    const proj   = document.getElementById('filter-project').value || 'mon-site';
+    const pwd  = usePwd && pwdEl.value ? `\n  data-password="${pwdEl.value}"` : '';
+    const proj = document.getElementById('filter-project').value || 'mon-site';
     document.getElementById('snippet-code').textContent =
       `<script src="${BASE_URL}/js/uxnote-cloud.js"\n  data-project-id="${proj}"${pwd}><\/script>`;
   }
@@ -484,9 +665,8 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     if (e.target===e.currentTarget) closeSnippetModal();
   });
 
-  function esc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  // ── Utils ──
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function shortUrl(url) {
     try { const u=new URL(url); return u.hostname+u.pathname.substring(0,20)+(u.pathname.length>20?'…':''); }
     catch { return url.substring(0,30); }
@@ -497,7 +677,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   function toast(msg) {
     const t=document.getElementById('toast');
     t.textContent=msg; t.classList.add('show');
-    setTimeout(()=>t.classList.remove('show'),2500);
+    setTimeout(()=>t.classList.remove('show'),2800);
   }
 
   loadAll();
