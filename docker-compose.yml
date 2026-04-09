@@ -1,21 +1,32 @@
 version: '3.8'
 
 services:
-  uxnote-cloud:
+  uxnote-app:
     build: .
-    container_name: uxnote-cloud
+    container_name: uxnote-app
     restart: unless-stopped
-    ports:
-      - "8080:80"   # Changer le port externe si besoin, Coolify gère ça via son reverse proxy
     volumes:
-      - uxnote_data:/var/www/html/data   # Persistance SQLite
-    environment:
-      - APACHE_RUN_USER=www-data
-      - APACHE_RUN_GROUP=www-data
+      - uxnote_data:/var/www/html/data
     labels:
-      # Labels Coolify / Traefik (optionnel si vous configurez le domaine dans Coolify)
       - "traefik.enable=true"
-      # - "traefik.http.routers.uxnote.rule=Host(`uxnote.votre-domaine.fr`)"
+      - "docker-volume-backup.stop-during-backup=true"
+
+  uxnote-backup:
+    image: offen/docker-volume-backup:latest
+    restart: always
+    environment:
+      AWS_S3_BUCKET_NAME: ${BACKUP_S3_BUCKET:-familiar-couper}
+      AWS_ENDPOINT: ${BACKUP_S3_ENDPOINT:-https://s3.gra.io.cloud.ovh.net/}
+      AWS_ACCESS_KEY_ID: ${BACKUP_S3_KEY}
+      AWS_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET}
+      AWS_REGION: gra
+      AWS_S3_PATH: uxnote-backups
+      BACKUP_CRON_EXPRESSION: "0 * * * *"
+      BACKUP_RETENTION_DAYS: "7"
+      BACKUP_FILENAME: "uxnote-backup-%Y-%m-%dT%H-%M-%S.tar.gz"
+    volumes:
+      - uxnote_data:/backup/uxnote_data:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
   uxnote_data:
