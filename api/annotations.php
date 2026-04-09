@@ -12,12 +12,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 define('UPLOAD_DIR', __DIR__ . '/../data/uploads/');
 define('MAX_FILE_SIZE', 5 * 1024 * 1024);
 
-$db_path = __DIR__ . '/../data/uxnote.sqlite';
+// ─── Connexion PostgreSQL via variables d'environnement ─────────────────────
+$db_host = getenv('DB_HOST')     ?: 'uxnote-db';
+$db_port = getenv('DB_PORT')     ?: '5432';
+$db_name = getenv('DB_NAME')     ?: 'uxnote';
+$db_user = getenv('DB_USER')     ?: 'uxnote';
+$db_pass = getenv('DB_PASSWORD') ?: 'uxnote_secret';
+
 try {
-    $db = new PDO('sqlite:' . $db_path);
+    $db = new PDO("pgsql:host=$db_host;port=$db_port;dbname=$db_name", $db_user, $db_pass);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $db->exec('PRAGMA journal_mode=WAL');
-    $db->exec('PRAGMA foreign_keys=ON');
 } catch (Exception $e) {
     json_error('Connexion DB impossible: ' . $e->getMessage(), 500);
 }
@@ -25,15 +29,15 @@ try {
 // ─── Migrations ─────────────────────────────────────────────────────────────
 $db->exec("
     CREATE TABLE IF NOT EXISTS annotations (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        id           SERIAL PRIMARY KEY,
         project_id   TEXT NOT NULL,
         page_url     TEXT NOT NULL,
         author_name  TEXT NOT NULL,
         author_email TEXT DEFAULT '',
         author_token TEXT DEFAULT '',
         comment      TEXT NOT NULL,
-        pos_x        REAL DEFAULT 0,
-        pos_y        REAL DEFAULT 0,
+        pos_x        FLOAT DEFAULT 0,
+        pos_y        FLOAT DEFAULT 0,
         status       TEXT DEFAULT 'open',
         file_name    TEXT DEFAULT '',
         file_path    TEXT DEFAULT '',
@@ -42,17 +46,16 @@ $db->exec("
         updated_at   INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS replies (
-        id              INTEGER PRIMARY KEY AUTOINCREMENT,
-        annotation_id   INTEGER NOT NULL,
+        id              SERIAL PRIMARY KEY,
+        annotation_id   INTEGER NOT NULL REFERENCES annotations(id) ON DELETE CASCADE,
         author_name     TEXT NOT NULL,
         author_email    TEXT DEFAULT '',
         author_token    TEXT DEFAULT '',
         comment         TEXT NOT NULL,
-        created_at      INTEGER NOT NULL,
-        FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE
+        created_at      INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS logs (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        id          SERIAL PRIMARY KEY,
         action      TEXT NOT NULL,
         project_id  TEXT DEFAULT '',
         author_name TEXT DEFAULT '',
@@ -60,7 +63,7 @@ $db->exec("
         created_at  INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS projects (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        id          SERIAL PRIMARY KEY,
         project_id  TEXT NOT NULL UNIQUE,
         status      TEXT DEFAULT 'active',
         archived_at INTEGER DEFAULT 0,
@@ -71,47 +74,32 @@ $db->exec("
     CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 ");
 
-// Migrations colonnes manquantes
-$cols = $db->query("PRAGMA table_info(annotations)")->fetchAll(PDO::FETCH_ASSOC);
-$col_names = array_column($cols, 'name');
-if (!in_array('author_token', $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN author_token TEXT DEFAULT ''");
-if (!in_array('file_name',    $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN file_name TEXT DEFAULT ''");
-if (!in_array('file_path',    $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN file_path TEXT DEFAULT ''");
-if (!in_array('file_size',    $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN file_size INTEGER DEFAULT 0");
-
 if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
-
-// ─── Auto-enregistrement des projets ────────────────────────────────────────
-function ensureProject($db, $project_id) {
-    $stmt = $db->prepare('INSERT OR IGNORE INTO projects (project_id, status, created_at) VALUES (?, \'active\', ?)');
-    $stmt->execute([$project_id, time()]);
-}
 
 // ─── Routing ────────────────────────────────────────────────────────────────
 $method = $_SERVER['REQUEST_METHOD'];
 
-if ($method === 'GET' && isset($_GET['download']))        { serveFile($_GET['download']); }
-if ($method === 'GET' && isset($_GET['logs']))            { getLogs(); }
-if ($method === 'GET' && isset($_GET['replies']))         { getReplies(intval($_GET['replies'])); }
-if ($method === 'GET' && isset($_GET['projects']))        { getProjects(); }
-if ($method === 'GET' && isset($_GET['check_project']))   { checkProject($_GET['check_project']); }
-if ($method === 'POST' && isset($_GET['archive']))        { archiveProject(); }
-if ($method === 'POST' && isset($_GET['unarchive']))      { unarchiveProject(); }
+if ($method === 'GET'  && isset($_GET['download']))      { serveFile($_GET['download']); }
+if ($method === 'GET'  && isset($_GET['logs']))          { getLogs(); }
+if ($method === 'GET'  && isset($_GET['replies']))       { getReplies(intval($_GET['replies'])); }
+if ($method === 'GET'  && isset($_GET['projects']))      { getProjects(); }
+if ($method === 'GET'  && isset($_GET['check_project'])) { checkProject($_GET['check_project']); }
+if ($method === 'POST' && isset($_GET['archive']))       { archiveProject(); }
+if ($method === 'POST' && isset($_GET['unarchive']))     { unarchiveProject(); }
 
 switch ($method) {
     case 'GET':
         if (isset($_GET['all'])) {
-            $archived = isset($_GET['archived']) ? 1 : 0;
+            $archived = isset($_GET['archived']) ? true : false;
+
             if ($archived) {
-                // Projets archivés
                 $stmt = $db->query("SELECT project_id FROM projects WHERE status = 'archived'");
                 $archived_ids = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'project_id');
                 if (empty($archived_ids)) { json_ok(['annotations' => [], 'count' => 0]); }
-                $placeholders = implode(',', array_fill(0, count($archived_ids), '?'));
+                $placeholders = implode(',', array_map(fn($i) => '$'.($i+1), array_keys($archived_ids)));
                 $stmt = $db->prepare("SELECT * FROM annotations WHERE project_id IN ($placeholders) ORDER BY created_at DESC");
                 $stmt->execute($archived_ids);
             } else {
-                // Projets actifs uniquement
                 $stmt = $db->prepare("
                     SELECT a.* FROM annotations a
                     LEFT JOIN projects p ON a.project_id = p.project_id
@@ -120,12 +108,13 @@ switch ($method) {
                 ");
                 $stmt->execute();
             }
+
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             foreach ($rows as &$row) {
-                $s = $db->prepare('SELECT COUNT(*) FROM replies WHERE annotation_id = ?');
+                $s = $db->prepare('SELECT COUNT(*) FROM replies WHERE annotation_id = $1');
                 $s->execute([$row['id']]);
                 $row['reply_count'] = (int)$s->fetchColumn();
-                $s2 = $db->prepare('SELECT * FROM replies WHERE annotation_id = ? ORDER BY created_at ASC');
+                $s2 = $db->prepare('SELECT * FROM replies WHERE annotation_id = $1 ORDER BY created_at ASC');
                 $s2->execute([$row['id']]);
                 $row['replies'] = $s2->fetchAll(PDO::FETCH_ASSOC);
             }
@@ -136,15 +125,15 @@ switch ($method) {
         $page_url   = $_GET['page_url']   ?? '';
         if (!$project_id) json_error('project_id requis');
 
-        $sql    = 'SELECT * FROM annotations WHERE project_id = ?';
+        $sql    = 'SELECT * FROM annotations WHERE project_id = $1';
         $params = [$project_id];
-        if ($page_url) { $sql .= ' AND page_url = ?'; $params[] = $page_url; }
+        if ($page_url) { $sql .= ' AND page_url = $2'; $params[] = $page_url; }
         $sql .= ' ORDER BY created_at ASC';
         $stmt = $db->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as &$row) {
-            $s = $db->prepare('SELECT * FROM replies WHERE annotation_id = ? ORDER BY created_at ASC');
+            $s = $db->prepare('SELECT * FROM replies WHERE annotation_id = $1 ORDER BY created_at ASC');
             $s->execute([$row['id']]);
             $row['replies'] = $s->fetchAll(PDO::FETCH_ASSOC);
         }
@@ -160,10 +149,11 @@ switch ($method) {
             $author_token  = sanitize($_POST['author_token'] ?? '');
             $comment       = sanitize($_POST['comment']      ?? '');
             if (!$annotation_id || !$author_name || !$comment) json_error('Champs requis manquants');
-            $stmt = $db->prepare("INSERT INTO replies (annotation_id, author_name, author_email, author_token, comment, created_at) VALUES (?,?,?,?,?,?)");
+            $stmt = $db->prepare("INSERT INTO replies (annotation_id, author_name, author_email, author_token, comment, created_at) VALUES (\$1,\$2,\$3,\$4,\$5,\$6) RETURNING id");
             $stmt->execute([$annotation_id, $author_name, $author_email, $author_token, $comment, time()]);
+            $id = $stmt->fetchColumn();
             addLog('reply', '', $author_name, "Réponse à l'annotation #$annotation_id");
-            json_ok(['id' => $db->lastInsertId(), 'message' => 'Réponse ajoutée'], 201);
+            json_ok(['id' => $id, 'message' => 'Réponse ajoutée'], 201);
         }
 
         // Nouvelle annotation
@@ -175,11 +165,10 @@ switch ($method) {
         $comment      = sanitize($_POST['comment']      ?? '');
         $pos_x        = floatval($_POST['pos_x']        ?? 0);
         $pos_y        = floatval($_POST['pos_y']        ?? 0);
-
         if (!$project_id || !$page_url || !$author_name || !$comment) json_error('Champs requis manquants');
 
-        // Vérifier que le projet n'est pas archivé
-        $stmt = $db->prepare("SELECT status FROM projects WHERE project_id = ?");
+        // Vérifier archivage
+        $stmt = $db->prepare("SELECT status FROM projects WHERE project_id = \$1");
         $stmt->execute([$project_id]);
         $proj = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($proj && $proj['status'] === 'archived') json_error('Projet archivé', 403);
@@ -200,9 +189,14 @@ switch ($method) {
         }
 
         $now  = time();
-        $stmt = $db->prepare("INSERT INTO annotations (project_id, page_url, author_name, author_email, author_token, comment, pos_x, pos_y, status, file_name, file_path, file_size, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'open',?,?,?,?,?)");
+        $stmt = $db->prepare("
+            INSERT INTO annotations
+            (project_id, page_url, author_name, author_email, author_token, comment, pos_x, pos_y, status, file_name, file_path, file_size, created_at, updated_at)
+            VALUES (\$1,\$2,\$3,\$4,\$5,\$6,\$7,\$8,'open',\$9,\$10,\$11,\$12,\$13)
+            RETURNING id
+        ");
         $stmt->execute([$project_id, $page_url, $author_name, $author_email, $author_token, $comment, $pos_x, $pos_y, $file_name, $file_path, $file_size, $now, $now]);
-        $id = $db->lastInsertId();
+        $id = $stmt->fetchColumn();
         addLog('create', $project_id, $author_name, "Annotation #$id sur $page_url");
         json_ok(['id' => $id, 'message' => 'Annotation créée'], 201);
         break;
@@ -213,7 +207,7 @@ switch ($method) {
         $id     = intval($body['id']);
         $status = $body['status'] ?? 'open';
         if (!in_array($status, ['open', 'resolved'])) json_error('Statut invalide');
-        $stmt = $db->prepare('UPDATE annotations SET status = ?, updated_at = ? WHERE id = ?');
+        $stmt = $db->prepare('UPDATE annotations SET status = $1, updated_at = $2 WHERE id = $3');
         $stmt->execute([$status, time(), $id]);
         if ($stmt->rowCount() === 0) json_error('Annotation non trouvée', 404);
         $actor = sanitize($body['actor'] ?? 'Dashboard');
@@ -226,20 +220,20 @@ switch ($method) {
         $token = $_GET['token'] ?? '';
         if (!$id) json_error('id requis');
         if ($token) {
-            $stmt = $db->prepare('SELECT author_token, author_name FROM annotations WHERE id = ?');
+            $stmt = $db->prepare('SELECT author_token, author_name FROM annotations WHERE id = $1');
             $stmt->execute([$id]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) json_error('Annotation non trouvée', 404);
             if ($row['author_token'] !== $token) json_error('Non autorisé', 403);
         }
-        $stmt = $db->prepare('SELECT file_path, author_name, project_id FROM annotations WHERE id = ?');
+        $stmt = $db->prepare('SELECT file_path, author_name, project_id FROM annotations WHERE id = $1');
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($row && $row['file_path']) {
             $f = UPLOAD_DIR . $row['file_path'];
             if (file_exists($f)) unlink($f);
         }
-        $db->prepare('DELETE FROM annotations WHERE id = ?')->execute([$id]);
+        $db->prepare('DELETE FROM annotations WHERE id = $1')->execute([$id]);
         addLog('delete', $row['project_id'] ?? '', $row['author_name'] ?? 'Dashboard', "Annotation #$id supprimée");
         json_ok(['message' => 'Annotation supprimée']);
         break;
@@ -249,13 +243,18 @@ switch ($method) {
 }
 
 // ─── Fonctions ───────────────────────────────────────────────────────────────
+function ensureProject($db, $project_id) {
+    $db->prepare("INSERT INTO projects (project_id, status, created_at) VALUES (\$1, 'active', \$2) ON CONFLICT (project_id) DO NOTHING")
+       ->execute([$project_id, time()]);
+}
+
 function getProjects() {
     global $db;
     $stmt = $db->query("
         SELECT p.*, COUNT(a.id) as annotation_count
         FROM projects p
         LEFT JOIN annotations a ON a.project_id = p.project_id
-        GROUP BY p.project_id
+        GROUP BY p.id
         ORDER BY p.status ASC, p.created_at DESC
     ");
     json_ok(['projects' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
@@ -263,37 +262,37 @@ function getProjects() {
 
 function checkProject($project_id) {
     global $db;
-    $stmt = $db->prepare("SELECT status FROM projects WHERE project_id = ?");
+    $stmt = $db->prepare("SELECT status FROM projects WHERE project_id = \$1");
     $stmt->execute([$project_id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $row    = $stmt->fetch(PDO::FETCH_ASSOC);
     $status = $row ? $row['status'] : 'active';
     json_ok(['status' => $status, 'archived' => ($status === 'archived')]);
 }
 
 function archiveProject() {
     global $db;
-    $body = json_decode(file_get_contents('php://input'), true);
+    $body       = json_decode(file_get_contents('php://input'), true);
     $project_id = sanitize($body['project_id'] ?? '');
     if (!$project_id) json_error('project_id requis');
-    $db->prepare("INSERT OR IGNORE INTO projects (project_id, status, created_at) VALUES (?, 'active', ?)")->execute([$project_id, time()]);
-    $db->prepare("UPDATE projects SET status = 'archived', archived_at = ? WHERE project_id = ?")->execute([time(), $project_id]);
+    $db->prepare("INSERT INTO projects (project_id, status, created_at) VALUES (\$1, 'active', \$2) ON CONFLICT (project_id) DO NOTHING")->execute([$project_id, time()]);
+    $db->prepare("UPDATE projects SET status = 'archived', archived_at = \$1 WHERE project_id = \$2")->execute([time(), $project_id]);
     addLog('archive', $project_id, 'Dashboard', "Projet '$project_id' archivé");
     json_ok(['message' => "Projet '$project_id' archivé"]);
 }
 
 function unarchiveProject() {
     global $db;
-    $body = json_decode(file_get_contents('php://input'), true);
+    $body       = json_decode(file_get_contents('php://input'), true);
     $project_id = sanitize($body['project_id'] ?? '');
     if (!$project_id) json_error('project_id requis');
-    $db->prepare("UPDATE projects SET status = 'active', archived_at = 0 WHERE project_id = ?")->execute([$project_id]);
+    $db->prepare("UPDATE projects SET status = 'active', archived_at = 0 WHERE project_id = \$1")->execute([$project_id]);
     addLog('unarchive', $project_id, 'Dashboard', "Projet '$project_id' réouvert");
     json_ok(['message' => "Projet '$project_id' réouvert"]);
 }
 
 function getReplies($annotation_id) {
     global $db;
-    $stmt = $db->prepare('SELECT * FROM replies WHERE annotation_id = ? ORDER BY created_at ASC');
+    $stmt = $db->prepare('SELECT * FROM replies WHERE annotation_id = $1 ORDER BY created_at ASC');
     $stmt->execute([$annotation_id]);
     json_ok(['replies' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
 }
@@ -302,21 +301,21 @@ function getLogs() {
     global $db;
     $date_from = isset($_GET['date_from']) ? intval($_GET['date_from']) : 0;
     $date_to   = isset($_GET['date_to'])   ? intval($_GET['date_to'])   : 0;
-    $archived  = isset($_GET['archived'])  ? 1 : 0;
+    $archived  = isset($_GET['archived'])  ? true : false;
 
     $sql    = 'SELECT * FROM logs WHERE 1=1';
     $params = [];
+    $i      = 1;
 
-    if ($date_from) { $sql .= ' AND created_at >= ?'; $params[] = $date_from; }
-    if ($date_to)   { $sql .= ' AND created_at <= ?'; $params[] = $date_to + 86400; }
+    if ($date_from) { $sql .= " AND created_at >= \$$i"; $params[] = $date_from; $i++; }
+    if ($date_to)   { $sql .= " AND created_at <= \$$i"; $params[] = $date_to + 86400; $i++; }
 
     if ($archived) {
-        // Logs des projets archivés
-        $stmt2 = $db->query("SELECT project_id FROM projects WHERE status = 'archived'");
-        $ids   = array_column($stmt2->fetchAll(PDO::FETCH_ASSOC), 'project_id');
+        $stmt2    = $db->query("SELECT project_id FROM projects WHERE status = 'archived'");
+        $ids      = array_column($stmt2->fetchAll(PDO::FETCH_ASSOC), 'project_id');
         if (!empty($ids)) {
-            $pl   = implode(',', array_fill(0, count($ids), '?'));
-            $sql .= " AND project_id IN ($pl)";
+            $pl    = implode(',', array_map(fn($j) => '$'.($i+$j), array_keys($ids)));
+            $sql  .= " AND project_id IN ($pl)";
             $params = array_merge($params, $ids);
         } else {
             json_ok(['logs' => []]);
@@ -331,10 +330,10 @@ function getLogs() {
 
 function serveFile($safe_name) {
     $safe_name = basename($safe_name);
-    $path = UPLOAD_DIR . $safe_name;
+    $path      = UPLOAD_DIR . $safe_name;
     if (!file_exists($path)) { http_response_code(404); echo 'Fichier non trouvé'; exit; }
     global $db;
-    $stmt = $db->prepare('SELECT file_name FROM annotations WHERE file_path = ?');
+    $stmt = $db->prepare('SELECT file_name FROM annotations WHERE file_path = $1');
     $stmt->execute([$safe_name]);
     $row  = $stmt->fetch(PDO::FETCH_ASSOC);
     $name = $row ? $row['file_name'] : $safe_name;
@@ -347,7 +346,7 @@ function serveFile($safe_name) {
 
 function addLog($action, $project_id, $author_name, $detail) {
     global $db;
-    $db->prepare('INSERT INTO logs (action, project_id, author_name, detail, created_at) VALUES (?,?,?,?,?)')
+    $db->prepare('INSERT INTO logs (action, project_id, author_name, detail, created_at) VALUES ($1,$2,$3,$4,$5)')
        ->execute([$action, $project_id, $author_name, $detail, time()]);
 }
 
