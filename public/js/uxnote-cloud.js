@@ -253,6 +253,7 @@
       pointer-events: none;
       z-index: 99998;
     }
+    #uxnote-marker-layer .uxnote-pin { pointer-events: auto; }
     #uxnote-add-btn {
       width:100%; padding:10px; background:${C.primary}; color:${C.white};
       border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;
@@ -468,10 +469,13 @@
 
       pin.addEventListener('click', () => {
         openPanel();
+        // Scroller vers l'item dans le panel
         setTimeout(() => {
-          const el2 = document.querySelector('[data-id="' + a.id + '"]');
-          if (el2) el2.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
+          const panelItem = document.querySelector('[data-id="' + a.id + '"]');
+          if (panelItem) panelItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+        // Scroller vers l'élément annoté sur la page
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     });
   }
@@ -700,9 +704,26 @@
 
   document.uxnoteCloud = {
     focusPin: (id) => {
-      const sorted = getSortedAnnotations();
-      const idx    = sorted.findIndex(a => a.id == id);
-      if (idx !== -1 && pinElements[idx]) pinElements[idx].scrollIntoView({ behavior:'smooth', block:'center' });
+      // Scroller vers l'élément annoté sur la page (pas vers le pin fixed)
+      const ann = annotations.find(a => a.id == id);
+      if (ann && ann.xpath) {
+        const el = findNodeByXPath(ann.xpath);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Flasher le cadre pour attirer l'attention
+          el.style.outline = '3px solid #3ce65f';
+          el.style.outlineOffset = '3px';
+          setTimeout(() => {
+            el.style.outline = '';
+            el.style.outlineOffset = '';
+            el.classList.add('uxnote-annotated');
+          }, 1500);
+          return;
+        }
+      }
+      // Fallback : scroller vers l'item dans le panel
+      const panelItem = document.querySelector('[data-id="' + id + '"]');
+      if (panelItem) panelItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
     resolve:   (id) => updateStatus(id, 'resolved'),
     unresolve: (id) => updateStatus(id, 'open'),
