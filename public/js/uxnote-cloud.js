@@ -397,12 +397,27 @@
       const el   = a.xpath ? findNodeByXPath(a.xpath) : null;
       const rect = el ? getVisibleRect(el) : null;
 
-      if (!rect) {
+      // pos_x/pos_y = coordonnées absolues du clic original
+      // rel_x = anchorY (top de l'élément ancre au moment du clic)
+      // rel_y = offsetY (offset du clic dans l'élément)
+      // Au resize : si l'élément a bougé verticalement, on recalcule absY
+      let absX = parseFloat(a.pos_x) || 0;
+      let absY = parseFloat(a.pos_y) || 0;
+
+      if (rect && a.rel_x !== undefined && a.rel_y !== undefined) {
+        const currentAnchorY = rect.y + window.scrollY; // top actuel de l'élément
+        const originalAnchorY = parseFloat(a.rel_x);    // top au moment du clic
+        const offsetY = parseFloat(a.rel_y);             // offset dans l'élément
+        // Recalculer absY si l'élément a bougé (ex: resize change la hauteur)
+        absY = currentAnchorY + offsetY;
+        // absX reste inchangé (le layout horizontal change peu)
+      }
+
+      if (!absX && !absY) {
         pin.style.display = 'none';
       } else {
         pin.style.display = '';
-        // positionPin utilise offsetParent comme positionMarker() dans l'original
-        positionPin(pin, rect);
+        positionPin(pin, absX, absY);
       }
 
       pin.addEventListener('click', () => {
@@ -535,19 +550,17 @@
       if (e.target.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,.uxnote-pin,#uxnote-pwd-overlay')) return;
       e.preventDefault(); e.stopPropagation();
 
-      // Ancrage à l'élément cliqué — comme le système original UXnote
-      // On stocke le XPath de l'élément + position relative dans l'élément en %
-      const target = e.target;
-      const rect   = target.getBoundingClientRect();
-      const relX   = (e.clientX - rect.left) / rect.width;   // % dans l'élément
-      const relY   = (e.clientY - rect.top)  / rect.height;  // % dans l'élément
+      // Stocker position exacte du clic (pageX/pageY absolus dans le document)
+      // + XPath de l'élément ancre pour recalculer si la page change de hauteur
+      const target  = e.target;
+      const elRect  = target.getBoundingClientRect();
+      const anchorY = elRect.top + window.scrollY; // top absolu de l'élément ancre
       pendingPos = {
-        xpath: getXPath(target),
-        relX,
-        relY,
-        // Fallback absolu en % du document si l'élément disparaît
-        fallbackX: (e.pageX / Math.max(document.body.scrollWidth,  document.documentElement.scrollWidth))  * 100,
-        fallbackY: (e.pageY / Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)) * 100
+        xpath:   getXPath(target),
+        absX:    e.pageX,              // position exacte X du clic dans le document
+        absY:    e.pageY,              // position exacte Y du clic dans le document
+        anchorY: anchorY,              // top de l'élément ancre au moment du clic
+        offsetY: e.pageY - anchorY     // offset vertical du clic dans l'élément
       };
       deactivateMode(); openModal();
     }, true);
@@ -590,13 +603,12 @@
       fd.append('author_email', currentUser.email || '');
       fd.append('author_token', userToken);
       fd.append('comment',      text);
-      // Ancrage DOM : xpath + position relative dans l'élément
-      fd.append('xpath',  pendingPos ? pendingPos.xpath    : '');
-      fd.append('rel_x',  pendingPos ? pendingPos.relX     : 0.5);
-      fd.append('rel_y',  pendingPos ? pendingPos.relY     : 0.5);
-      // Fallback en % document
-      fd.append('pos_x',  pendingPos ? pendingPos.fallbackX : 0);
-      fd.append('pos_y',  pendingPos ? pendingPos.fallbackY : 0);
+      // Position exacte du clic + ancrage XPath
+      fd.append('xpath',    pendingPos ? pendingPos.xpath   : '');
+      fd.append('pos_x',    pendingPos ? pendingPos.absX    : 0);  // pageX absolu
+      fd.append('pos_y',    pendingPos ? pendingPos.absY    : 0);  // pageY absolu
+      fd.append('rel_x',    pendingPos ? pendingPos.anchorY : 0);  // top ancre (stocké dans rel_x)
+      fd.append('rel_y',    pendingPos ? pendingPos.offsetY : 0);  // offset dans ancre (stocké dans rel_y)
       const fileInput = document.getElementById('uxnote-file-input');
       if (fileInput && fileInput.files[0]) fd.append('file', fileInput.files[0]);
       await fetch(API, { method:'POST', body:fd });
@@ -685,15 +697,15 @@
 
   // Reproduit positionMarker() de l'original exactement
   // Le marker est placé en position:absolute dans son offsetParent
-  function positionPin(pin, rect) {
+  // Positionne le pin à une coordonnée absolue (absX, absY = pageX/pageY du clic)
+  // Recalcule en tenant compte du offsetParent (comme positionMarker original)
+  function positionPin(pin, absX, absY) {
     const offsetParent = pin.offsetParent || document.body;
     const parentRect   = offsetParent.getBoundingClientRect();
     const parentDocX   = parentRect.x + window.scrollX;
     const parentDocY   = parentRect.y + window.scrollY;
-    const targetDocX   = rect.x + window.scrollX;
-    const targetDocY   = rect.y + window.scrollY;
-    pin.style.left = (targetDocX - parentDocX + rect.width  + 4) + 'px';
-    pin.style.top  = (targetDocY - parentDocY               - 4) + 'px';
+    pin.style.left = (absX - parentDocX) + 'px';
+    pin.style.top  = (absY - parentDocY) + 'px';
   }
 
   function escHtml(s) {
