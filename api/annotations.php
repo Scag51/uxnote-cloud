@@ -352,7 +352,8 @@ function addLog($action, $project_id, $author_name, $detail) {
 }
 
 function sanitize($val) {
-    return htmlspecialchars(strip_tags(trim((string)$val)), ENT_QUOTES, 'UTF-8');
+    // strip_tags uniquement — le JS gère l'échappement à l'affichage via escHtml()
+    return strip_tags(trim((string)$val));
 }
 function json_ok($data, $code = 200) {
     http_response_code($code);
