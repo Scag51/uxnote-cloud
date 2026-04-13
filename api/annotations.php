@@ -38,6 +38,9 @@ $db->exec("
         file_name    TEXT DEFAULT '',
         file_path    TEXT DEFAULT '',
         file_size    INTEGER DEFAULT 0,
+        xpath        TEXT DEFAULT '',
+        rel_x        REAL DEFAULT 0.5,
+        rel_y        REAL DEFAULT 0.5,
         created_at   INTEGER NOT NULL,
         updated_at   INTEGER NOT NULL
     );
@@ -78,6 +81,9 @@ if (!in_array('author_token', $col_names)) $db->exec("ALTER TABLE annotations AD
 if (!in_array('file_name',    $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN file_name TEXT DEFAULT ''");
 if (!in_array('file_path',    $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN file_path TEXT DEFAULT ''");
 if (!in_array('file_size',    $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN file_size INTEGER DEFAULT 0");
+if (!in_array('xpath',        $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN xpath TEXT DEFAULT ''");
+if (!in_array('rel_x',        $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN rel_x REAL DEFAULT 0.5");
+if (!in_array('rel_y',        $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN rel_y REAL DEFAULT 0.5");
 
 if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
 
@@ -175,6 +181,9 @@ switch ($method) {
         $comment      = sanitize($_POST['comment']      ?? '');
         $pos_x        = floatval($_POST['pos_x']        ?? 0);
         $pos_y        = floatval($_POST['pos_y']        ?? 0);
+        $xpath        = sanitize($_POST['xpath']        ?? '');
+        $rel_x        = floatval($_POST['rel_x']        ?? 0.5);
+        $rel_y        = floatval($_POST['rel_y']        ?? 0.5);
 
         if (!$project_id || !$page_url || !$author_name || !$comment) json_error('Champs requis manquants');
 
@@ -200,8 +209,8 @@ switch ($method) {
         }
 
         $now  = time();
-        $stmt = $db->prepare("INSERT INTO annotations (project_id, page_url, author_name, author_email, author_token, comment, pos_x, pos_y, status, file_name, file_path, file_size, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'open',?,?,?,?,?)");
-        $stmt->execute([$project_id, $page_url, $author_name, $author_email, $author_token, $comment, $pos_x, $pos_y, $file_name, $file_path, $file_size, $now, $now]);
+        $stmt = $db->prepare("INSERT INTO annotations (project_id, page_url, author_name, author_email, author_token, comment, pos_x, pos_y, xpath, rel_x, rel_y, status, file_name, file_path, file_size, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?,?)");
+        $stmt->execute([$project_id, $page_url, $author_name, $author_email, $author_token, $comment, $pos_x, $pos_y, $xpath, $rel_x, $rel_y, $file_name, $file_path, $file_size, $now, $now]);
         $id = $db->lastInsertId();
         addLog('create', $project_id, $author_name, "Annotation #$id sur $page_url");
         json_ok(['id' => $id, 'message' => 'Annotation créée'], 201);
