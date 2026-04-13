@@ -298,9 +298,14 @@
 
   function getSortedAnnotations() {
     return [...annotations].sort((a, b) => {
-      const posA = getPinPosition(a);
-      const posB = getPinPosition(b);
-      return posA.y - posB.y;
+      // Trier par position Y réelle de l'élément dans le document (comme l'original)
+      const elA  = a.xpath ? findNodeByXPath(a.xpath) : null;
+      const elB  = b.xpath ? findNodeByXPath(b.xpath) : null;
+      const rectA = elA ? elA.getBoundingClientRect() : null;
+      const rectB = elB ? elB.getBoundingClientRect() : null;
+      const yA = rectA ? (rectA.top + window.scrollY) : (a.pos_y || 0);
+      const yB = rectB ? (rectB.top + window.scrollY) : (b.pos_y || 0);
+      return yA - yB;
     });
   }
 
@@ -373,27 +378,40 @@
     }).join('');
   }
 
+  // Reproduit refreshMarkers() de l'original UXnote exactement
   function renderPins() {
     pinElements.forEach(p => p.remove());
     pinElements = [];
     const sorted = getSortedAnnotations();
     sorted.forEach((a, i) => {
       const pin = document.createElement('div');
-      pin.className = `uxnote-pin status-${a.status}${a.author_token===userToken?' mine':''}`;
-      const pos = getPinPosition(a);
-      pin.style.left = pos.x + 'px';
-      pin.style.top  = pos.y + 'px';
-      pin.innerHTML  = `<span class="uxnote-pin-number">${i+1}</span>`;
-      pin.title      = `#${i+1} ${a.author_name}: ${a.comment}`;
+      pin.className = 'uxnote-pin status-' + a.status + (a.author_token === userToken ? ' mine' : '');
+      pin.innerHTML  = '<span class="uxnote-pin-number">' + (i+1) + '</span>';
+      pin.title      = '#' + (i+1) + ' ' + a.author_name + ': ' + a.comment;
+
+      // Ajouter au body AVANT de calculer la position (offsetParent doit être défini)
+      document.body.appendChild(pin);
+      pinElements.push(pin);
+
+      // Retrouver l'élément via XPath comme l'original
+      const el   = a.xpath ? findNodeByXPath(a.xpath) : null;
+      const rect = el ? getVisibleRect(el) : null;
+
+      if (!rect) {
+        pin.style.display = 'none';
+      } else {
+        pin.style.display = '';
+        // positionPin utilise offsetParent comme positionMarker() dans l'original
+        positionPin(pin, rect);
+      }
+
       pin.addEventListener('click', () => {
         openPanel();
         setTimeout(() => {
-          const el = document.querySelector(`[data-id="${a.id}"]`);
-          if (el) el.scrollIntoView({ behavior:'smooth', block:'center' });
+          const el2 = document.querySelector('[data-id="' + a.id + '"]');
+          if (el2) el2.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 100);
       });
-      document.body.appendChild(pin);
-      pinElements.push(pin);
     });
   }
 
@@ -631,21 +649,21 @@
     await loadAnnotations();
   }
 
-  // ─── XPath helpers ────────────────────────────────────────────────────────
-  function getXPath(el) {
-    if (!el || el.nodeType !== 1) return '';
-    if (el === document.body) return '/html/body';
+  // ─── XPath helpers — système exact de l'original UXnote ─────────────────
+  function getXPath(node) {
+    if (node === document.body) return '/html/body';
     const parts = [];
-    let node = el;
-    while (node && node.nodeType === 1 && node !== document.documentElement) {
+    while (node && node !== document) {
       let index = 1;
-      let sib = node.previousSibling;
-      while (sib) {
-        if (sib.nodeType === 1 && sib.nodeName === node.nodeName) index++;
-        sib = sib.previousSibling;
+      let sibling = node.previousSibling;
+      while (sibling) {
+        if (sibling.nodeType === node.nodeType && sibling.nodeName === node.nodeName) index++;
+        sibling = sibling.previousSibling;
       }
-      parts.unshift(node.nodeName.toLowerCase() + '[' + index + ']');
+      const name = node.nodeType === 3 ? 'text()' : node.nodeName.toLowerCase();
+      parts.unshift(name + '[' + index + ']');
       node = node.parentNode;
+      if (!node || node.nodeType !== 1) break;
     }
     return '/' + parts.join('/');
   }
@@ -657,22 +675,25 @@
     } catch(e) { return null; }
   }
 
-  function getPinPosition(a) {
-    if (a.xpath) {
-      const el = findNodeByXPath(a.xpath);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        const absX = rect.left + window.scrollX + (a.rel_x || 0.5) * rect.width;
-        const absY = rect.top  + window.scrollY + (a.rel_y || 0.5) * rect.height;
-        return { x: absX, y: absY };
-      }
-    }
-    if (a.pos_x !== undefined && a.pos_y !== undefined) {
-      const docW = Math.max(document.body.scrollWidth,  document.documentElement.scrollWidth);
-      const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
-      return { x: (a.pos_x / 100) * docW, y: (a.pos_y / 100) * docH };
-    }
-    return { x: 0, y: 0 };
+  // Reproduit getVisibleRect() de l'original
+  function getVisibleRect(el) {
+    if (!el || !el.getBoundingClientRect) return null;
+    let rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    return rect;
+  }
+
+  // Reproduit positionMarker() de l'original exactement
+  // Le marker est placé en position:absolute dans son offsetParent
+  function positionPin(pin, rect) {
+    const offsetParent = pin.offsetParent || document.body;
+    const parentRect   = offsetParent.getBoundingClientRect();
+    const parentDocX   = parentRect.x + window.scrollX;
+    const parentDocY   = parentRect.y + window.scrollY;
+    const targetDocX   = rect.x + window.scrollX;
+    const targetDocY   = rect.y + window.scrollY;
+    pin.style.left = (targetDocX - parentDocX + rect.width  + 4) + 'px';
+    pin.style.top  = (targetDocY - parentDocY               - 4) + 'px';
   }
 
   function escHtml(s) {
@@ -686,6 +707,27 @@
     createUI(); bindEvents();
     await checkProjectStatus();
     if (authenticated) loadAnnotations();
+
+    // Reproduit bindGlobalHandlers() de l'original — refresh au resize et scroll
+    window.addEventListener('resize', renderPins);
+    window.addEventListener('scroll', renderPins, { passive: true });
+
+    // MutationObserver comme startLayoutObserver() dans l'original
+    // Repositionne les pins si le DOM change (animations, accordéons, etc.)
+    if (window.MutationObserver) {
+      const layoutObserver = new MutationObserver((mutations) => {
+        const relevant = mutations.some((m) => {
+          const t = m.target;
+          return t && !(t.closest && t.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,#uxnote-pwd-overlay,.uxnote-pin'));
+        });
+        if (relevant) renderPins();
+      });
+      layoutObserver.observe(document.body, {
+        childList: true, subtree: true, attributes: true,
+        attributeFilter: ['style', 'class', 'open', 'hidden', 'aria-hidden']
+      });
+    }
+
     setInterval(async () => {
       if (authenticated) {
         await checkProjectStatus();
