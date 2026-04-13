@@ -133,16 +133,27 @@
     .uxnote-btn-sm.delete:hover { border-color:${C.danger}; color:${C.danger}; background:#fff0f1; }
 
     .uxnote-pin {
-      position:absolute; width:28px; height:28px; border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg); display:flex; align-items:center; justify-content:center;
-      cursor:pointer; z-index:99999; border:2px solid ${C.white};
-      box-shadow:0 2px 8px ${C.shadow}; transition:transform 0.15s;
+      position:absolute;
+      width:28px; height:28px;
+      /* Pointe vers la GAUCHE — border-radius 50% 0 50% 50% + rotate(45deg) */
+      border-radius:50% 0 50% 50%;
+      transform:rotate(45deg);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; z-index:99999;
+      border:2px solid ${C.white};
+      box-shadow:0 2px 10px ${C.shadow};
+      transition:transform 0.15s, box-shadow 0.15s;
     }
-    .uxnote-pin:hover { transform:rotate(-45deg) scale(1.15); }
-    .uxnote-pin-number { transform:rotate(45deg); color:${C.white}; font-size:11px; font-weight:700; font-family:'Montserrat',sans-serif; }
-    .uxnote-pin.status-open     { background:${C.primary}; }
+    .uxnote-pin:hover { transform:rotate(45deg) scale(1.15); box-shadow:0 4px 16px ${C.shadow}; }
+    .uxnote-pin-number {
+      transform:rotate(-45deg); color:${C.white};
+      font-size:11px; font-weight:700; font-family:'Montserrat',sans-serif;
+      line-height:1; user-select:none;
+    }
+    /* Couleur principale : #222339 (bleu foncé Equinoxes) */
+    .uxnote-pin.status-open      { background:${C.primary}; }
     .uxnote-pin.status-open.mine { background:#9b5de5; }
-    .uxnote-pin.status-resolved { background:${C.accent}; }
+    .uxnote-pin.status-resolved  { background:${C.accent}; }
 
     #uxnote-cursor-hint {
       position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
