@@ -135,24 +135,25 @@
     .uxnote-pin {
       position:absolute;
       width:28px; height:28px;
-      /* Pointe vers la GAUCHE — border-radius 50% 0 50% 50% + rotate(45deg) */
-      border-radius:50% 0 50% 50%;
-      transform:rotate(45deg);
+      /* Pointe vers la gauche : forme de larme orientée gauche */
+      /* border-radius 50% 50% 0 50% + rotate(-45deg) = pointe en bas-gauche */
+      border-radius:50% 50% 50% 0;
+      transform:rotate(135deg);
       display:flex; align-items:center; justify-content:center;
       cursor:pointer; z-index:99999;
       border:2px solid ${C.white};
       box-shadow:0 2px 10px ${C.shadow};
       transition:transform 0.15s, box-shadow 0.15s;
     }
-    .uxnote-pin:hover { transform:rotate(45deg) scale(1.15); box-shadow:0 4px 16px ${C.shadow}; }
+    .uxnote-pin:hover { transform:rotate(135deg) scale(1.15); box-shadow:0 4px 16px ${C.shadow}; }
     .uxnote-pin-number {
-      transform:rotate(-45deg); color:${C.white};
+      transform:rotate(-135deg); color:${C.white};
       font-size:11px; font-weight:700; font-family:'Montserrat',sans-serif;
       line-height:1; user-select:none;
     }
-    /* Couleur principale : #222339 (bleu foncé Equinoxes) */
+    /* Bleu foncé Equinoxes dans tous les cas, vert quand résolu */
     .uxnote-pin.status-open      { background:${C.primary}; }
-    .uxnote-pin.status-open.mine { background:#9b5de5; }
+    .uxnote-pin.status-open.mine { background:${C.primary}; }
     .uxnote-pin.status-resolved  { background:${C.accent}; }
 
     #uxnote-cursor-hint {
