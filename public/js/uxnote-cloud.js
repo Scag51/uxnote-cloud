@@ -397,27 +397,12 @@
       const el   = a.xpath ? findNodeByXPath(a.xpath) : null;
       const rect = el ? getVisibleRect(el) : null;
 
-      // pos_x/pos_y = coordonnées absolues du clic original
-      // rel_x = anchorY (top de l'élément ancre au moment du clic)
-      // rel_y = offsetY (offset du clic dans l'élément)
-      // Au resize : si l'élément a bougé verticalement, on recalcule absY
-      let absX = parseFloat(a.pos_x) || 0;
-      let absY = parseFloat(a.pos_y) || 0;
-
-      if (rect && a.rel_x !== undefined && a.rel_y !== undefined) {
-        const currentAnchorY = rect.y + window.scrollY; // top actuel de l'élément
-        const originalAnchorY = parseFloat(a.rel_x);    // top au moment du clic
-        const offsetY = parseFloat(a.rel_y);             // offset dans l'élément
-        // Recalculer absY si l'élément a bougé (ex: resize change la hauteur)
-        absY = currentAnchorY + offsetY;
-        // absX reste inchangé (le layout horizontal change peu)
-      }
-
-      if (!absX && !absY) {
+      // Comme l'original : getBoundingClientRect() recalculé à chaque rendu
+      if (!rect) {
         pin.style.display = 'none';
       } else {
         pin.style.display = '';
-        positionPin(pin, absX, absY);
+        positionPin(pin, rect);
       }
 
       pin.addEventListener('click', () => {
@@ -550,18 +535,10 @@
       if (e.target.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,.uxnote-pin,#uxnote-pwd-overlay')) return;
       e.preventDefault(); e.stopPropagation();
 
-      // Stocker position exacte du clic (pageX/pageY absolus dans le document)
-      // + XPath de l'élément ancre pour recalculer si la page change de hauteur
-      const target  = e.target;
-      const elRect  = target.getBoundingClientRect();
-      const anchorY = elRect.top + window.scrollY; // top absolu de l'élément ancre
-      pendingPos = {
-        xpath:   getXPath(target),
-        absX:    e.pageX,              // position exacte X du clic dans le document
-        absY:    e.pageY,              // position exacte Y du clic dans le document
-        anchorY: anchorY,              // top de l'élément ancre au moment du clic
-        offsetY: e.pageY - anchorY     // offset vertical du clic dans l'élément
-      };
+      // Stocker uniquement le XPath de l'élément cliqué
+      // Exactement comme l'original UXnote — pas de coordonnées, juste l'élément
+      const target = e.target;
+      pendingPos = { xpath: getXPath(target) };
       deactivateMode(); openModal();
     }, true);
     document.addEventListener('keydown', (e) => {
@@ -603,12 +580,12 @@
       fd.append('author_email', currentUser.email || '');
       fd.append('author_token', userToken);
       fd.append('comment',      text);
-      // Position exacte du clic + ancrage XPath
-      fd.append('xpath',    pendingPos ? pendingPos.xpath   : '');
-      fd.append('pos_x',    pendingPos ? pendingPos.absX    : 0);  // pageX absolu
-      fd.append('pos_y',    pendingPos ? pendingPos.absY    : 0);  // pageY absolu
-      fd.append('rel_x',    pendingPos ? pendingPos.anchorY : 0);  // top ancre (stocké dans rel_x)
-      fd.append('rel_y',    pendingPos ? pendingPos.offsetY : 0);  // offset dans ancre (stocké dans rel_y)
+      // Uniquement le XPath — la position est recalculée via getBoundingClientRect
+      fd.append('xpath',  pendingPos ? pendingPos.xpath : '');
+      fd.append('pos_x',  0);
+      fd.append('pos_y',  0);
+      fd.append('rel_x',  0);
+      fd.append('rel_y',  0);
       const fileInput = document.getElementById('uxnote-file-input');
       if (fileInput && fileInput.files[0]) fd.append('file', fileInput.files[0]);
       await fetch(API, { method:'POST', body:fd });
@@ -697,15 +674,17 @@
 
   // Reproduit positionMarker() de l'original exactement
   // Le marker est placé en position:absolute dans son offsetParent
-  // Positionne le pin à une coordonnée absolue (absX, absY = pageX/pageY du clic)
-  // Recalcule en tenant compte du offsetParent (comme positionMarker original)
-  function positionPin(pin, absX, absY) {
+  // Reproduit positionMarker() de l'original exactement
+  // Place le pin au coin supérieur droit de l'élément annoté
+  function positionPin(pin, rect) {
     const offsetParent = pin.offsetParent || document.body;
     const parentRect   = offsetParent.getBoundingClientRect();
     const parentDocX   = parentRect.x + window.scrollX;
     const parentDocY   = parentRect.y + window.scrollY;
-    pin.style.left = (absX - parentDocX) + 'px';
-    pin.style.top  = (absY - parentDocY) + 'px';
+    const targetDocX   = rect.x + window.scrollX;
+    const targetDocY   = rect.y + window.scrollY;
+    pin.style.left = (targetDocX - parentDocX + rect.width  + 4) + 'px';
+    pin.style.top  = (targetDocY - parentDocY               - 4) + 'px';
   }
 
   function escHtml(s) {
