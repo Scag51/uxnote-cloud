@@ -376,8 +376,9 @@
     sorted.forEach((a, i) => {
       const pin = document.createElement('div');
       pin.className = `uxnote-pin status-${a.status}${a.author_token===userToken?' mine':''}`;
+      // pos_y est stockée en coordonnées absolues (pageY), position:absolute dans body
       pin.style.left = a.pos_x + 'px';
-      pin.style.top  = (a.pos_y + window.scrollY) + 'px';
+      pin.style.top  = a.pos_y + 'px';
       pin.innerHTML  = `<span class="uxnote-pin-number">${i+1}</span>`;
       pin.title      = `#${i+1} ${a.author_name}: ${a.comment}`;
       pin.addEventListener('click', () => {
@@ -511,7 +512,8 @@
       if (!annotationMode) return;
       if (e.target.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,.uxnote-pin,#uxnote-pwd-overlay')) return;
       e.preventDefault(); e.stopPropagation();
-      pendingPos = { x: e.pageX, y: e.pageY - window.scrollY };
+      // Stocker la position absolue dans le document (indépendante du scroll)
+      pendingPos = { x: e.pageX, y: e.pageY };
       deactivateMode(); openModal();
     }, true);
     document.addEventListener('keydown', (e) => {
