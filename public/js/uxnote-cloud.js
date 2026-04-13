@@ -217,6 +217,33 @@
     .uxnote-empty p { font-size:13px; }
     body.uxnote-mode-active { cursor:crosshair !important; }
     body.uxnote-mode-active * { cursor:crosshair !important; }
+
+    /* Cadre bleu sur les éléments annotés — comme l'original */
+    .uxnote-annotated {
+      outline: 2px solid #3ce65f !important;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 3px rgba(60,230,95,0.12);
+    }
+
+    /* Hover outline en mode annotation — comme wn-annot-outline */
+    #uxnote-hover-outline {
+      position: fixed;
+      pointer-events: none;
+      border: 2px dashed #3ce65f;
+      background: rgba(60,230,95,0.08);
+      z-index: 999990;
+      display: none;
+      box-sizing: border-box;
+    }
+
+    /* Marker layer en position:fixed — clé du bon positionnement */
+    #uxnote-marker-layer {
+      position: fixed;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 99998;
+    }
     #uxnote-add-btn {
       width:100%; padding:10px; background:${C.primary}; color:${C.white};
       border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;
@@ -258,6 +285,16 @@
     hint.id = 'uxnote-cursor-hint';
     hint.textContent = 'Cliquez sur la zone à annoter — Échap pour annuler';
     document.body.appendChild(hint);
+
+    // Marker layer en position:fixed (comme wn-annot-marker-layer)
+    const markerLayer = document.createElement('div');
+    markerLayer.id = 'uxnote-marker-layer';
+    document.body.appendChild(markerLayer);
+
+    // Hover outline (comme wn-annot-outline)
+    const hoverOutline = document.createElement('div');
+    hoverOutline.id = 'uxnote-hover-outline';
+    document.body.appendChild(hoverOutline);
 
     const modalOv = document.createElement('div');
     modalOv.id = 'uxnote-modal-overlay';
@@ -378,31 +415,46 @@
     }).join('');
   }
 
-  // Reproduit refreshMarkers() de l'original UXnote exactement
+  // Reproduit refreshMarkers() + applyElementHighlight() de l'original
   function renderPins() {
+    // Nettoyer les pins existants
     pinElements.forEach(p => p.remove());
     pinElements = [];
+
+    // Nettoyer les highlights sur les éléments
+    document.querySelectorAll('.uxnote-annotated').forEach(el => {
+      el.classList.remove('uxnote-annotated');
+    });
+
+    const markerLayer = document.getElementById('uxnote-marker-layer');
+    if (!markerLayer) return;
+
     const sorted = getSortedAnnotations();
     sorted.forEach((a, i) => {
+      // Retrouver l'élément via XPath
+      const el   = a.xpath ? findNodeByXPath(a.xpath) : null;
+      const rect = el ? getVisibleRect(el) : null;
+
+      // Appliquer le highlight sur l'élément (comme applyElementHighlight)
+      if (el && rect && !projectArchived) {
+        el.classList.add('uxnote-annotated');
+      }
+
+      // Créer le pin dans le marker layer (position:absolute dans fixed layer)
       const pin = document.createElement('div');
       pin.className = 'uxnote-pin status-' + a.status + (a.author_token === userToken ? ' mine' : '');
       pin.innerHTML  = '<span class="uxnote-pin-number">' + (i+1) + '</span>';
       pin.title      = '#' + (i+1) + ' ' + a.author_name + ': ' + a.comment;
-
-      // Ajouter au body AVANT de calculer la position (offsetParent doit être défini)
-      document.body.appendChild(pin);
+      markerLayer.appendChild(pin);
       pinElements.push(pin);
 
-      // Retrouver l'élément via XPath comme l'original
-      const el   = a.xpath ? findNodeByXPath(a.xpath) : null;
-      const rect = el ? getVisibleRect(el) : null;
-
-      // Comme l'original : getBoundingClientRect() recalculé à chaque rendu
       if (!rect) {
         pin.style.display = 'none';
       } else {
         pin.style.display = '';
-        positionPin(pin, rect);
+        // Positionner dans le marker layer fixed — rect est déjà en coordonnées viewport !
+        pin.style.left = (rect.x + rect.width  + 4) + 'px';
+        pin.style.top  = (rect.y               - 4) + 'px';
       }
 
       pin.addEventListener('click', () => {
@@ -496,6 +548,8 @@
     document.getElementById('uxnote-cursor-hint').style.display = 'none';
     document.getElementById('uxnote-toggle-btn').classList.remove('active');
     document.getElementById('uxnote-btn-label').textContent = projectArchived ? 'Archivé' : 'Annoter';
+    const outline = document.getElementById('uxnote-hover-outline');
+    if (outline) outline.style.display = 'none';
   }
 
   function openPanel()  { document.getElementById('uxnote-panel').classList.add('open'); }
@@ -530,9 +584,31 @@
     document.getElementById('uxnote-close-panel').addEventListener('click', () => {
       document.getElementById('uxnote-panel').classList.remove('open');
     });
+    // Hover outline en mode annotation (comme handleElementHover dans l'original)
+    document.addEventListener('mousemove', (e) => {
+      if (!annotationMode) return;
+      const outline = document.getElementById('uxnote-hover-outline');
+      if (!outline) return;
+      const target = e.target;
+      if (!target || target.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,.uxnote-pin,#uxnote-pwd-overlay,#uxnote-marker-layer')) {
+        outline.style.display = 'none';
+        return;
+      }
+      const rect = target.getBoundingClientRect();
+      if (!rect.width || !rect.height) { outline.style.display = 'none'; return; }
+      outline.style.display = 'block';
+      outline.style.left    = rect.x + 'px';
+      outline.style.top     = rect.y + 'px';
+      outline.style.width   = rect.width  + 'px';
+      outline.style.height  = rect.height + 'px';
+    });
+
     document.addEventListener('click', (e) => {
       if (!annotationMode) return;
-      if (e.target.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,.uxnote-pin,#uxnote-pwd-overlay')) return;
+      // Cacher le hover outline au clic
+      const outline = document.getElementById('uxnote-hover-outline');
+      if (outline) outline.style.display = 'none';
+      if (e.target.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,.uxnote-pin,#uxnote-pwd-overlay,#uxnote-marker-layer,#uxnote-hover-outline')) return;
       e.preventDefault(); e.stopPropagation();
 
       // Stocker uniquement le XPath de l'élément cliqué
@@ -674,18 +750,7 @@
 
   // Reproduit positionMarker() de l'original exactement
   // Le marker est placé en position:absolute dans son offsetParent
-  // Reproduit positionMarker() de l'original exactement
-  // Place le pin au coin supérieur droit de l'élément annoté
-  function positionPin(pin, rect) {
-    const offsetParent = pin.offsetParent || document.body;
-    const parentRect   = offsetParent.getBoundingClientRect();
-    const parentDocX   = parentRect.x + window.scrollX;
-    const parentDocY   = parentRect.y + window.scrollY;
-    const targetDocX   = rect.x + window.scrollX;
-    const targetDocY   = rect.y + window.scrollY;
-    pin.style.left = (targetDocX - parentDocX + rect.width  + 4) + 'px';
-    pin.style.top  = (targetDocY - parentDocY               - 4) + 'px';
-  }
+
 
   function escHtml(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
