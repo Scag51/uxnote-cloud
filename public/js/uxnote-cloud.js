@@ -297,7 +297,11 @@
   }
 
   function getSortedAnnotations() {
-    return [...annotations].sort((a, b) => a.pos_y - b.pos_y);
+    return [...annotations].sort((a, b) => {
+      const posA = getPinPosition(a);
+      const posB = getPinPosition(b);
+      return posA.y - posB.y;
+    });
   }
 
   function renderPanel() {
@@ -376,9 +380,9 @@
     sorted.forEach((a, i) => {
       const pin = document.createElement('div');
       pin.className = `uxnote-pin status-${a.status}${a.author_token===userToken?' mine':''}`;
-      // pos_y est stockée en coordonnées absolues (pageY), position:absolute dans body
-      pin.style.left = a.pos_x + 'px';
-      pin.style.top  = a.pos_y + 'px';
+      const pos = getPinPosition(a);
+      pin.style.left = pos.x + 'px';
+      pin.style.top  = pos.y + 'px';
       pin.innerHTML  = `<span class="uxnote-pin-number">${i+1}</span>`;
       pin.title      = `#${i+1} ${a.author_name}: ${a.comment}`;
       pin.addEventListener('click', () => {
@@ -512,8 +516,21 @@
       if (!annotationMode) return;
       if (e.target.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,.uxnote-pin,#uxnote-pwd-overlay')) return;
       e.preventDefault(); e.stopPropagation();
-      // Stocker la position absolue dans le document (indépendante du scroll)
-      pendingPos = { x: e.pageX, y: e.pageY };
+
+      // Ancrage à l'élément cliqué — comme le système original UXnote
+      // On stocke le XPath de l'élément + position relative dans l'élément en %
+      const target = e.target;
+      const rect   = target.getBoundingClientRect();
+      const relX   = (e.clientX - rect.left) / rect.width;   // % dans l'élément
+      const relY   = (e.clientY - rect.top)  / rect.height;  // % dans l'élément
+      pendingPos = {
+        xpath: getXPath(target),
+        relX,
+        relY,
+        // Fallback absolu en % du document si l'élément disparaît
+        fallbackX: (e.pageX / Math.max(document.body.scrollWidth,  document.documentElement.scrollWidth))  * 100,
+        fallbackY: (e.pageY / Math.max(document.body.scrollHeight, document.documentElement.scrollHeight)) * 100
+      };
       deactivateMode(); openModal();
     }, true);
     document.addEventListener('keydown', (e) => {
@@ -555,8 +572,13 @@
       fd.append('author_email', currentUser.email || '');
       fd.append('author_token', userToken);
       fd.append('comment',      text);
-      fd.append('pos_x',        pendingPos ? pendingPos.x : 0);
-      fd.append('pos_y',        pendingPos ? pendingPos.y : 0);
+      // Ancrage DOM : xpath + position relative dans l'élément
+      fd.append('xpath',  pendingPos ? pendingPos.xpath    : '');
+      fd.append('rel_x',  pendingPos ? pendingPos.relX     : 0.5);
+      fd.append('rel_y',  pendingPos ? pendingPos.relY     : 0.5);
+      // Fallback en % document
+      fd.append('pos_x',  pendingPos ? pendingPos.fallbackX : 0);
+      fd.append('pos_y',  pendingPos ? pendingPos.fallbackY : 0);
       const fileInput = document.getElementById('uxnote-file-input');
       if (fileInput && fileInput.files[0]) fd.append('file', fileInput.files[0]);
       await fetch(API, { method:'POST', body:fd });
@@ -607,6 +629,50 @@
       body: JSON.stringify({ id, status, actor: currentUser ? currentUser.name : 'Anonyme' })
     });
     await loadAnnotations();
+  }
+
+  // ─── XPath helpers ────────────────────────────────────────────────────────
+  function getXPath(el) {
+    if (!el || el.nodeType !== 1) return '';
+    if (el === document.body) return '/html/body';
+    const parts = [];
+    let node = el;
+    while (node && node.nodeType === 1 && node !== document.documentElement) {
+      let index = 1;
+      let sib = node.previousSibling;
+      while (sib) {
+        if (sib.nodeType === 1 && sib.nodeName === node.nodeName) index++;
+        sib = sib.previousSibling;
+      }
+      parts.unshift(node.nodeName.toLowerCase() + '[' + index + ']');
+      node = node.parentNode;
+    }
+    return '/' + parts.join('/');
+  }
+
+  function findNodeByXPath(xpath) {
+    try {
+      const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      return result.singleNodeValue;
+    } catch(e) { return null; }
+  }
+
+  function getPinPosition(a) {
+    if (a.xpath) {
+      const el = findNodeByXPath(a.xpath);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const absX = rect.left + window.scrollX + (a.rel_x || 0.5) * rect.width;
+        const absY = rect.top  + window.scrollY + (a.rel_y || 0.5) * rect.height;
+        return { x: absX, y: absY };
+      }
+    }
+    if (a.pos_x !== undefined && a.pos_y !== undefined) {
+      const docW = Math.max(document.body.scrollWidth,  document.documentElement.scrollWidth);
+      const docH = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+      return { x: (a.pos_x / 100) * docW, y: (a.pos_y / 100) * docH };
+    }
+    return { x: 0, y: 0 };
   }
 
   function escHtml(s) {
