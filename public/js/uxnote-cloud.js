@@ -708,25 +708,9 @@
     await checkProjectStatus();
     if (authenticated) loadAnnotations();
 
-    // Reproduit bindGlobalHandlers() de l'original — refresh au resize et scroll
+    // Refresh au resize et scroll (comme l'original)
     window.addEventListener('resize', renderPins);
     window.addEventListener('scroll', renderPins, { passive: true });
-
-    // MutationObserver comme startLayoutObserver() dans l'original
-    // Repositionne les pins si le DOM change (animations, accordéons, etc.)
-    if (window.MutationObserver) {
-      const layoutObserver = new MutationObserver((mutations) => {
-        const relevant = mutations.some((m) => {
-          const t = m.target;
-          return t && !(t.closest && t.closest('#uxnote-bar,#uxnote-panel,#uxnote-modal-overlay,#uxnote-pwd-overlay,.uxnote-pin'));
-        });
-        if (relevant) renderPins();
-      });
-      layoutObserver.observe(document.body, {
-        childList: true, subtree: true, attributes: true,
-        attributeFilter: ['style', 'class', 'open', 'hidden', 'aria-hidden']
-      });
-    }
 
     setInterval(async () => {
       if (authenticated) {
