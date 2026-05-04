@@ -88,15 +88,19 @@
     }
     .uxnote-filter-btn {
       all: initial;
-      flex: 1; padding: 7px 4px; border-radius: 6px; border: 1px solid ${C.accent};
+      flex: 1; padding: 8px 6px; border-radius: 20px; border: 2px solid #e2e4ef;
       background: ${C.white}; cursor: pointer; font-size: 11px; font-weight: 600;
-      font-family: 'Montserrat', sans-serif; color: ${C.primary};
-      text-align: center; transition: all 0.15s; box-sizing: border-box;
+      font-family: 'Montserrat', sans-serif; color: ${C.slate};
+      text-align: center; transition: all 0.2s; box-sizing: border-box;
       display: inline-flex !important; align-items: center !important;
-      justify-content: center !important; gap: 4px !important;
+      justify-content: center !important; gap: 5px !important;
     }
-    .uxnote-filter-btn.active { background: ${C.accent} !important; color: ${C.primary} !important; border-color: ${C.accent} !important; }
-    .uxnote-filter-btn:hover:not(.active) { background: #f0fdf4 !important; }
+    .uxnote-filter-btn.active {
+      background: ${C.accent} !important; color: ${C.primary} !important;
+      border-color: ${C.accent} !important; font-weight: 700 !important;
+      box-shadow: 0 2px 8px rgba(60,230,95,0.3) !important;
+    }
+    .uxnote-filter-btn:hover:not(.active) { background: #f0fdf4 !important; border-color: ${C.accent} !important; color: ${C.primary} !important; }
     #uxnote-modal select {
       width: 100%; box-sizing: border-box; padding: 10px 12px;
       border: 1px solid #e2e4ef; border-radius: 8px; font-size: 13px;
@@ -363,16 +367,13 @@
       <div id="uxnote-panel-footer">
         <div id="uxnote-filter-bar">
           <button class="uxnote-filter-btn active" onclick="window.setFilter('all',this)">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Tous
+            ☰ Tous
           </button>
           <button class="uxnote-filter-btn" onclick="window.setFilter('open',this)">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg>
-            En cours
+            ● En cours
           </button>
           <button class="uxnote-filter-btn" onclick="window.setFilter('resolved',this)">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-            Résolus
+            ✓ Résolus
           </button>
         </div>
         <button id="uxnote-add-btn">+ Ajouter une annotation</button>
