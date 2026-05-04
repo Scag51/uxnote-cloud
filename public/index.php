@@ -88,7 +88,8 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
 
     /* ── Table ── */
     .table-wrap { background:#fff; border-radius:12px; box-shadow:0 1px 6px rgba(34,35,57,0.07); overflow:hidden; }
-    table { width:100%; border-collapse:collapse; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    table.auto-layout { table-layout:auto; }
     thead th { background:#f8f9fc; padding:13px 16px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#757686; border-bottom:1px solid #e2e4ef; font-weight:600; }
     thead th.sortable { cursor:pointer; user-select:none; }
     thead th.sortable:hover { background:#eef0f8; color:#222339; }
@@ -98,14 +99,15 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     tbody tr.main-row:hover { background:#f8f9fc; }
     tbody tr.detail-row { display:none; background:#f8f9fc; }
     tbody tr.detail-row.open { display:table-row; }
-    tbody td { padding:13px 16px; font-size:13px; vertical-align:top; }
+    tbody td { padding:13px 12px; font-size:13px; vertical-align:top; overflow:hidden; max-width:0; }
     .badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; }
     .badge.open     { background:#e8eaf6; color:#222339; }
     .badge.resolved { background:#dcfce7; color:#15803d; }
     .badge.archived { background:#f0f1f8; color:#757686; }
     .project-tag { background:#f0f9f1; color:#222339; padding:3px 9px; border-radius:5px; font-size:12px; font-weight:600; border-left:3px solid #3ce65f; display:inline-block; }
     .project-tag.archived { border-left-color:#757686; background:#f4f5f7; color:#757686; }
-    .comment-preview { max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .comment-preview { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    tbody td { padding:13px 12px; font-size:13px; vertical-align:top; overflow:hidden; text-overflow:ellipsis; }
     .reply-count { font-size:11px; color:#757686; margin-top:3px; }
     .url-link { color:#222339; text-decoration:none; font-size:12px; font-weight:500; }
     .url-link:hover { color:#3ce65f; }
@@ -231,17 +233,17 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
       <table>
         <thead>
           <tr>
-            <th style="width:32px"></th>
-            <th class="sortable" onclick="sortBy('id')">#</th>
-            <th class="sortable" onclick="sortBy('project_id')">Projet</th>
-            <th class="sortable" onclick="sortBy('page_url')">Page</th>
-            <th class="sortable" onclick="sortBy('author_name')">Auteur</th>
-            <th class="sortable" onclick="sortBy('assigned_to')">Destinataire</th>
-            <th>Commentaire</th>
-            <th class="sortable" onclick="sortBy('file_name')">Fichier</th>
-            <th class="sortable" onclick="sortBy('status')">Statut</th>
-            <th class="sortable" onclick="sortBy('created_at')">Date</th>
-            <th>Actions</th>
+            <th style="width:28px"></th>
+            <th class="sortable" style="width:60px" onclick="sortBy('id')">#</th>
+            <th class="sortable" style="width:100px" onclick="sortBy('project_id')">Projet</th>
+            <th class="sortable" style="width:130px" onclick="sortBy('page_url')">Page</th>
+            <th class="sortable" style="width:120px" onclick="sortBy('author_name')">Auteur</th>
+            <th class="sortable" style="width:110px" onclick="sortBy('assigned_to')">Destinataire</th>
+            <th style="width:auto">Commentaire</th>
+            <th class="sortable" style="width:90px" onclick="sortBy('file_name')">Fichier</th>
+            <th class="sortable" style="width:90px" onclick="sortBy('status')">Statut</th>
+            <th class="sortable" style="width:100px" onclick="sortBy('created_at')">Date</th>
+            <th style="width:80px">Actions</th>
           </tr>
         </thead>
         <tbody id="table-body">
