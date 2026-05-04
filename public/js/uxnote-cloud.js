@@ -43,7 +43,17 @@
   style.textContent = `
     @import url('https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Montserrat:wght@300;400;500;600&display=swap');
 
-    #uxnote-bar { position:fixed; bottom:24px; left:20px; z-index:999999; font-family:'Montserrat',sans-serif; }
+    #uxnote-bar { position:fixed; bottom:24px; left:20px; z-index:999999; font-family:'Montserrat',sans-serif; display:flex; flex-direction:column; align-items:flex-start; gap:10px; }
+
+    /* Bouton rond pour rouvrir le panel */
+    #uxnote-panel-btn {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: ${C.primary}; border: 3px solid ${C.accent};
+      cursor: pointer; display: none; align-items: center; justify-content: center;
+      box-shadow: 0 4px 16px ${C.shadow}; transition: all 0.2s;
+    }
+    #uxnote-panel-btn:hover { background: #2d2f4a; transform: scale(1.1); }
+    #uxnote-panel-btn svg { display: block; }
     #uxnote-toggle-btn {
       background:${C.primary}; color:${C.white}; border:none; border-radius:50px;
       padding:11px 20px; cursor:pointer; font-size:13px; font-weight:600;
@@ -351,6 +361,11 @@
           <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
         </svg>
         <span id="uxnote-btn-label">Annoter</span>
+      </button>
+      <button id="uxnote-panel-btn" title="Voir les annotations">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${C.white}" stroke-width="2.5">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+        </svg>
       </button>`;
     document.body.appendChild(bar);
 
@@ -671,7 +686,7 @@
     document.getElementById('uxnote-cursor-hint').style.display = 'block';
     document.getElementById('uxnote-toggle-btn').classList.add('active');
     document.getElementById('uxnote-btn-label').textContent = 'Annuler';
-    document.getElementById('uxnote-panel').classList.remove('open');
+    closePanel();
   }
 
   function deactivateMode() {
@@ -684,7 +699,19 @@
     if (outline) outline.style.display = 'none';
   }
 
-  function openPanel()  { document.getElementById('uxnote-panel').classList.add('open'); }
+  function openPanel() {
+    document.getElementById('uxnote-panel').classList.add('open');
+    const pb = document.getElementById('uxnote-panel-btn');
+    if (pb) pb.style.display = 'none';
+  }
+
+  function closePanel() {
+    document.getElementById('uxnote-panel').classList.remove('open');
+    if (authenticated) {
+      const pb = document.getElementById('uxnote-panel-btn');
+      if (pb) pb.style.display = 'flex';
+    }
+  }
   function closeModal() { document.getElementById('uxnote-modal-overlay').classList.remove('open'); }
 
   function openPasswordScreen() {
@@ -712,11 +739,16 @@
     });
     document.getElementById('uxnote-add-btn').addEventListener('click', () => {
       if (projectArchived) return;
-      document.getElementById('uxnote-panel').classList.remove('open');
+      closePanel();
       activateMode();
     });
     document.getElementById('uxnote-close-panel').addEventListener('click', () => {
-      document.getElementById('uxnote-panel').classList.remove('open');
+      closePanel();
+    });
+
+    // Bouton rond pour rouvrir le panel
+    document.getElementById('uxnote-panel-btn').addEventListener('click', () => {
+      openPanel();
     });
     // Hover outline en mode annotation (comme handleElementHover dans l'original)
     document.addEventListener('mousemove', (e) => {
@@ -817,6 +849,8 @@
       authenticated = true;
       document.getElementById('uxnote-pwd-overlay').classList.remove('open');
       err.style.display = 'none';
+      const pb = document.getElementById('uxnote-panel-btn');
+      if (pb) pb.style.display = 'flex';
       loadAnnotations(); openPanel();
     } else {
       err.style.display = 'block';
@@ -832,7 +866,7 @@
         const el = findNodeByXPath(ann.xpath);
         if (el) {
           // Fermer le panel pour voir la page
-          document.getElementById('uxnote-panel').classList.remove('open');
+          closePanel();
           setTimeout(() => {
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             // Flash vert pour indiquer l'élément
