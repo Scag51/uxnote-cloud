@@ -405,7 +405,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
         + '</div>'
         + '<div style="display:flex;gap:6px">'
         + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="editIntervenant(' + i.id + ')">✏️</button>'
-        + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;width:auto;min-width:0" onclick="toggleIntervenant(' + i.id + ',' + i.actif + ')">' + toggle + '</button>'
+        + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;width:auto!important;min-width:0!important;flex:none" onclick="toggleIntervenant(' + i.id + ',' + i.actif + ')">' + toggle + '</button>'
         + '<button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="deleteIntervenant(' + i.id + ')">🗑</button>'
         + '</div>'
         + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="showNotifSettings(' + i.id + ',\'' + esc(i.prenom) + '\')">🔔</button>'
@@ -689,11 +689,10 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
                 ${repliesHtml?`<div class="detail-replies"><h4>↩ Réponses (${replies.length})</h4>${repliesHtml}</div>`:''}
                 <div style="margin-top:12px;padding-top:12px;border-top:1px dashed #e2e4ef;display:flex;align-items:center;gap:10px">
                   <span style="font-size:12px;color:#757686;font-weight:600">👤 Destinataire :</span>
-                  <select id="interv-select-${a.id}" style="padding:6px 10px;border:1px solid #e2e4ef;border-radius:8px;font-size:12px;font-family:'Montserrat',sans-serif;outline:none;color:#222339" onchange="">
+                  <select id="interv-select-${a.id}" data-current="${a.assigned_to}" style="padding:6px 10px;border:1px solid #e2e4ef;border-radius:8px;font-size:12px;font-family:'Montserrat',sans-serif;outline:none;color:#222339">
                     <option value="0">— Non assigné —</option>
-                    ${allIntervenants.filter(i=>i.actif).map(i=>`<option value="${i.id}" ${a.assigned_to==i.id?'selected':''}>${esc(i.prenom)}${i.poste?' ('+esc(i.poste)+')':''}</option>`).join('')}
                   </select>
-                  <button class="btn btn-primary" style="padding:5px 12px;font-size:12px" onclick="changeIntervenant(${a.id})">💾 Changer</button>
+                  <button class="btn btn-primary" style="padding:5px 12px;font-size:12px;width:auto!important;min-width:0!important" onclick="changeIntervenant(${a.id})">💾 Changer</button>
                   <span id="interv-msg-${a.id}" style="font-size:11px;color:#3ce65f;display:none">✓ Envoyé !</span>
                 </div>
               </div>
@@ -707,6 +706,24 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   function toggleDetail(rowId) {
     document.getElementById(rowId)?.classList.toggle('open');
     document.getElementById('btn-'+rowId)?.classList.toggle('open');
+    // Peupler le select intervenants de cette ligne au premier clic
+    const row = document.getElementById(rowId);
+    if (row) populateIntervSelects(row);
+  }
+
+  function populateIntervSelects(container) {
+    container = container || document;
+    container.querySelectorAll('select[id^="interv-select-"]').forEach(sel => {
+      if (sel.options.length > 1) return; // déjà peuplé
+      const current = parseInt(sel.dataset.current) || 0;
+      allIntervenants.filter(i => i.actif).forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i.id;
+        opt.textContent = i.prenom + (i.poste ? ' (' + i.poste + ')' : '');
+        if (i.id == current) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    });
   }
 
   function renderPagination() {
