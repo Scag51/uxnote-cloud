@@ -140,7 +140,8 @@ if ($method === 'POST' && isset($_GET['archive']))        { archiveProject(); }
 if ($method === 'POST' && isset($_GET['unarchive']))      { unarchiveProject(); }
 if ($method === 'POST' && isset($_GET['intervenant']))    { saveIntervenant(); }
 if ($method === 'DELETE' && isset($_GET['intervenant']))  { deleteIntervenant(); }
-if ($method === 'POST' && isset($_GET['notif_settings'])) { saveNotifSettings(); }
+if ($method === 'POST' && isset($_GET['notif_settings']))    { saveNotifSettings(); }
+if ($method === 'POST' && isset($_GET['change_intervenant'])) { changeIntervenant(); }
 if ($method === 'GET'  && isset($_GET['notif_settings'])) { getNotifSettings(); }
 
 switch ($method) {
@@ -352,6 +353,33 @@ function deleteIntervenant() {
 }
 
 // ─── Paramètres notifications ─────────────────────────────────────────────────
+function changeIntervenant() {
+    global $db;
+    $body          = json_decode(file_get_contents('php://input'), true);
+    $annotation_id = intval($body['annotation_id'] ?? 0);
+    $assigned_to   = intval($body['assigned_to']   ?? 0);
+    if (!$annotation_id) json_error('annotation_id requis');
+
+    // Récupérer l'annotation
+    $stmt = $db->prepare('SELECT * FROM annotations WHERE id = ?');
+    $stmt->execute([$annotation_id]);
+    $ann = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$ann) json_error('Annotation non trouvée', 404);
+
+    // Mettre à jour
+    $db->prepare('UPDATE annotations SET assigned_to = ?, updated_at = ? WHERE id = ?')
+       ->execute([$assigned_to, time(), $annotation_id]);
+
+    addLog('assign', $ann['project_id'], 'Dashboard', "Annotation #$annotation_id assignée à intervenant #$assigned_to");
+
+    // Envoyer notification si nouvel intervenant
+    if ($assigned_to) {
+        sendNotificationIfNeeded($db, $ann['project_id'], $assigned_to, $annotation_id, $ann['author_name'], $ann['comment'], $ann['page_url']);
+    }
+
+    json_ok(['message' => 'Intervenant mis à jour']);
+}
+
 function getNotifSettings() {
     global $db;
     $intervenant_id = intval($_GET['notif_settings'] ?? 0);
