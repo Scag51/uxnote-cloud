@@ -90,6 +90,10 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     .table-wrap { background:#fff; border-radius:12px; box-shadow:0 1px 6px rgba(34,35,57,0.07); overflow:hidden; }
     table { width:100%; border-collapse:collapse; }
     thead th { background:#f8f9fc; padding:13px 16px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:#757686; border-bottom:1px solid #e2e4ef; font-weight:600; }
+    thead th.sortable { cursor:pointer; user-select:none; }
+    thead th.sortable:hover { background:#eef0f8; color:#222339; }
+    thead th.sort-asc::after  { content:' ↑'; color:#3ce65f; }
+    thead th.sort-desc::after { content:' ↓'; color:#3ce65f; }
     tbody tr.main-row { border-bottom:1px solid #f4f5f7; transition:background 0.1s; cursor:pointer; }
     tbody tr.main-row:hover { background:#f8f9fc; }
     tbody tr.detail-row { display:none; background:#f8f9fc; }
@@ -224,7 +228,18 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th style="width:32px"></th><th>#</th><th>Projet</th><th>Page</th><th>Auteur</th><th>Commentaire</th><th>Fichier</th><th>Statut</th><th>Date</th><th>Actions</th></tr>
+          <tr>
+            <th style="width:32px"></th>
+            <th class="sortable" onclick="sortBy('id')">#</th>
+            <th class="sortable" onclick="sortBy('project_id')">Projet</th>
+            <th class="sortable" onclick="sortBy('page_url')">Page</th>
+            <th class="sortable" onclick="sortBy('author_name')">Auteur</th>
+            <th>Commentaire</th>
+            <th class="sortable" onclick="sortBy('file_name')">Fichier</th>
+            <th class="sortable" onclick="sortBy('status')">Statut</th>
+            <th class="sortable" onclick="sortBy('created_at')">Date</th>
+            <th>Actions</th>
+          </tr>
         </thead>
         <tbody id="table-body">
           <tr><td colspan="10"><div class="empty-state"><p>Chargement…</p></div></td></tr>
@@ -314,8 +329,24 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   let allAnnotations = [], filtered = [], allProjects = [], archivedAnnotations = [], allArchiveLogs = [];
   const PER_PAGE = 25;
   let currentPage = 1;
+  let sortField = 'created_at', sortDir = 'desc';
 
   // ── Chargement actif ──
+  function sortBy(field) {
+    if (sortField === field) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortField = field;
+      sortDir   = field === 'created_at' ? 'desc' : 'asc';
+    }
+    // Mettre à jour les classes sur les en-têtes
+    document.querySelectorAll('thead th.sortable').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+    });
+    event.currentTarget.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    applyFilters();
+  }
+
   async function loadAll() {
     try {
       const res  = await fetch(`${API}?all=1`);
@@ -373,8 +404,18 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
       if (status  && a.status      !== status)  return false;
       if (text && !a.comment.toLowerCase().includes(text) &&
           !a.author_name.toLowerCase().includes(text) &&
-          !a.page_url.toLowerCase().includes(text)) return false;
+          !a.page_url.toLowerCase().includes(text) &&
+          !(a.file_name||'').toLowerCase().includes(text)) return false;
       return true;
+    });
+    // Appliquer le tri
+    filtered.sort((a, b) => {
+      let va = a[sortField] || '', vb = b[sortField] || '';
+      if (typeof va === 'string') va = va.toLowerCase();
+      if (typeof vb === 'string') vb = vb.toLowerCase();
+      if (va < vb) return sortDir === 'asc' ? -1 :  1;
+      if (va > vb) return sortDir === 'asc' ?  1 : -1;
+      return 0;
     });
     currentPage = 1; renderTable(); renderPagination();
   }
@@ -396,7 +437,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
       html += `
         <tr class="main-row" onclick="${hasDetail?`toggleDetail('${rowId}')`:''}" >
           <td>${hasDetail?`<button class="expand-btn" id="btn-${rowId}" onclick="event.stopPropagation();toggleDetail('${rowId}')">›</button>`:''}</td>
-          <td style="color:#757686;font-size:12px">${start+i+1}</td>
+          <td style="color:#757686;font-size:12px">#${a.id}</td>
           <td><span class="project-tag">${esc(a.project_id)}</span></td>
           <td><a class="url-link" href="${esc(a.page_url)}" target="_blank" onclick="event.stopPropagation()">${shortUrl(a.page_url)}</a></td>
           <td>
@@ -681,7 +722,26 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   }
 
   loadAll();
-  setInterval(loadAll, 20000);
+
+  // Pause du refresh si l'utilisateur interagit — évite de perdre sa pagination
+  let userActive = false;
+  let refreshInterval;
+
+  function resetActivity() {
+    userActive = true;
+    clearTimeout(window._activityTimer);
+    window._activityTimer = setTimeout(() => { userActive = false; }, 30000); // 30s d'inactivité
+  }
+
+  document.addEventListener('click',    resetActivity);
+  document.addEventListener('keydown',  resetActivity);
+  document.addEventListener('mousemove', resetActivity);
+
+  function smartRefresh() {
+    if (!userActive) loadAll();
+  }
+
+  refreshInterval = setInterval(smartRefresh, 20000);
 </script>
 
 <?php endif; ?>
