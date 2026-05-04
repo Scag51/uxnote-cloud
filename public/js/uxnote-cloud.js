@@ -88,13 +88,15 @@
     }
     .uxnote-filter-btn {
       all: initial;
-      flex: 1; padding: 6px 4px; border-radius: 6px; border: 1px solid #e2e4ef;
+      flex: 1; padding: 7px 4px; border-radius: 6px; border: 1px solid ${C.accent};
       background: ${C.white}; cursor: pointer; font-size: 11px; font-weight: 600;
-      font-family: 'Montserrat', sans-serif; color: ${C.slate};
+      font-family: 'Montserrat', sans-serif; color: ${C.primary};
       text-align: center; transition: all 0.15s; box-sizing: border-box;
+      display: inline-flex !important; align-items: center !important;
+      justify-content: center !important; gap: 4px !important;
     }
-    .uxnote-filter-btn.active { background: ${C.primary} !important; color: ${C.white} !important; border-color: ${C.primary} !important; }
-    .uxnote-filter-btn:hover:not(.active) { background: ${C.light} !important; }
+    .uxnote-filter-btn.active { background: ${C.accent} !important; color: ${C.primary} !important; border-color: ${C.accent} !important; }
+    .uxnote-filter-btn:hover:not(.active) { background: #f0fdf4 !important; }
     #uxnote-modal select {
       width: 100%; box-sizing: border-box; padding: 10px 12px;
       border: 1px solid #e2e4ef; border-radius: 8px; font-size: 13px;
@@ -360,9 +362,18 @@
       </div>
       <div id="uxnote-panel-footer">
         <div id="uxnote-filter-bar">
-          <button class="uxnote-filter-btn active" onclick="setFilter('all',this)">Tous</button>
-          <button class="uxnote-filter-btn" onclick="setFilter('open',this)">● En cours</button>
-          <button class="uxnote-filter-btn" onclick="setFilter('resolved',this)">✓ Résolus</button>
+          <button class="uxnote-filter-btn active" onclick="window.setFilter('all',this)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Tous
+          </button>
+          <button class="uxnote-filter-btn" onclick="window.setFilter('open',this)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/></svg>
+            En cours
+          </button>
+          <button class="uxnote-filter-btn" onclick="window.setFilter('resolved',this)">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Résolus
+          </button>
         </div>
         <button id="uxnote-add-btn">+ Ajouter une annotation</button>
       </div>`;
@@ -424,17 +435,18 @@
   }
 
   function getSortedAnnotations() {
-    return [...annotations].sort((a, b) => {
-      // Trier par position Y réelle de l'élément dans le document (comme l'original)
-      const elA  = a.xpath ? findNodeByXPath(a.xpath) : null;
-      const elB  = b.xpath ? findNodeByXPath(b.xpath) : null;
-      const rectA = elA ? elA.getBoundingClientRect() : null;
-      const rectB = elB ? elB.getBoundingClientRect() : null;
-      const yA = rectA ? (rectA.top + window.scrollY) : (a.pos_y || 0);
-      const yB = rectB ? (rectB.top + window.scrollY) : (b.pos_y || 0);
-      return yA - yB;
-    });
+    // Filtrer par statut si actif
+    const list = filterStatus === 'all' ? annotations : annotations.filter(a => a.status === filterStatus);
+    return list;
   }
+
+  // Exposé globalement car appelé depuis onclick HTML dans le panel
+  window.setFilter = function(status, btn) {
+    filterStatus = status;
+    document.querySelectorAll('.uxnote-filter-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderPanel(); renderPins();
+  };
 
   function renderPanel() {
     const body   = document.getElementById('uxnote-panel-body');
@@ -814,24 +826,27 @@
 
   document.uxnoteCloud = {
     focusPin: (id) => {
-      // Scroller vers l'élément annoté sur la page (pas vers le pin fixed)
       const ann = annotations.find(a => a.id == id);
       if (ann && ann.xpath) {
         const el = findNodeByXPath(ann.xpath);
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Flasher le cadre pour attirer l'attention
-          el.style.outline = '3px solid #3ce65f';
-          el.style.outlineOffset = '3px';
+          // Fermer le panel pour voir la page
+          document.getElementById('uxnote-panel').classList.remove('open');
           setTimeout(() => {
-            el.style.outline = '';
-            el.style.outlineOffset = '';
-            el.classList.add('uxnote-annotated');
-          }, 1500);
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            // Flash vert pour indiquer l'élément
+            const origOutline = el.style.outline;
+            el.style.outline = '3px solid #3ce65f';
+            el.style.outlineOffset = '3px';
+            setTimeout(() => {
+              el.style.outline = origOutline;
+              el.style.outlineOffset = '';
+            }, 2000);
+          }, 300);
           return;
         }
       }
-      // Fallback : scroller vers l'item dans le panel
+      // Fallback : scroller dans le panel
       const panelItem = document.querySelector('[data-id="' + id + '"]');
       if (panelItem) panelItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
     },
