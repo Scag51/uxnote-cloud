@@ -12,6 +12,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 define('UPLOAD_DIR', __DIR__ . '/../data/uploads/');
 define('MAX_FILE_SIZE', 5 * 1024 * 1024);
 
+// ─── SMTP Config ─────────────────────────────────────────────────────────────
+define('SMTP_HOST',     getenv('SMTP_HOST')     ?: 'nodels5-eu.n0c.com');
+define('SMTP_PORT',     getenv('SMTP_PORT')     ?: 587);
+define('SMTP_USER',     getenv('SMTP_USER')     ?: 'clement@qoma.fr');
+define('SMTP_PASS',     getenv('SMTP_PASS')     ?: 'Jq1cE4WrwmCaa7eZA5kENh7yW@');
+define('SMTP_FROM',     getenv('SMTP_FROM')     ?: 'clement@qoma.fr');
+define('SMTP_FROM_NAME',getenv('SMTP_FROM_NAME')?: 'UX Note Cloud - Équinoxes');
+
+// ─── Base de données ──────────────────────────────────────────────────────────
 $db_path = __DIR__ . '/../data/uxnote.sqlite';
 try {
     $db = new PDO('sqlite:' . $db_path);
@@ -22,7 +31,7 @@ try {
     json_error('Connexion DB impossible: ' . $e->getMessage(), 500);
 }
 
-// ─── Migrations ─────────────────────────────────────────────────────────────
+// ─── Migrations ───────────────────────────────────────────────────────────────
 $db->exec("
     CREATE TABLE IF NOT EXISTS annotations (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,6 +50,7 @@ $db->exec("
         xpath        TEXT DEFAULT '',
         rel_x        REAL DEFAULT 0.5,
         rel_y        REAL DEFAULT 0.5,
+        assigned_to  INTEGER DEFAULT 0,
         created_at   INTEGER NOT NULL,
         updated_at   INTEGER NOT NULL
     );
@@ -69,6 +79,29 @@ $db->exec("
         archived_at INTEGER DEFAULT 0,
         created_at  INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS intervenants (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        prenom     TEXT NOT NULL,
+        poste      TEXT DEFAULT '',
+        email      TEXT NOT NULL,
+        actif      INTEGER DEFAULT 1,
+        created_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS notifications (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id     TEXT NOT NULL,
+        intervenant_id INTEGER NOT NULL,
+        last_sent_at   INTEGER DEFAULT 0,
+        UNIQUE(project_id, intervenant_id)
+    );
+    CREATE TABLE IF NOT EXISTS notification_settings (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        intervenant_id INTEGER NOT NULL,
+        project_id     TEXT NOT NULL,
+        enabled        INTEGER DEFAULT 1,
+        cooldown_hours INTEGER DEFAULT 24,
+        UNIQUE(intervenant_id, project_id)
+    );
     CREATE INDEX IF NOT EXISTS idx_project_page ON annotations(project_id, page_url);
     CREATE INDEX IF NOT EXISTS idx_replies_annotation ON replies(annotation_id);
     CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
@@ -84,32 +117,37 @@ if (!in_array('file_size',    $col_names)) $db->exec("ALTER TABLE annotations AD
 if (!in_array('xpath',        $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN xpath TEXT DEFAULT ''");
 if (!in_array('rel_x',        $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN rel_x REAL DEFAULT 0.5");
 if (!in_array('rel_y',        $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN rel_y REAL DEFAULT 0.5");
+if (!in_array('assigned_to',  $col_names)) $db->exec("ALTER TABLE annotations ADD COLUMN assigned_to INTEGER DEFAULT 0");
 
 if (!is_dir(UPLOAD_DIR)) mkdir(UPLOAD_DIR, 0755, true);
 
-// ─── Auto-enregistrement des projets ────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function ensureProject($db, $project_id) {
-    $stmt = $db->prepare('INSERT OR IGNORE INTO projects (project_id, status, created_at) VALUES (?, \'active\', ?)');
-    $stmt->execute([$project_id, time()]);
+    $db->prepare("INSERT OR IGNORE INTO projects (project_id, status, created_at) VALUES (?, 'active', ?)")
+       ->execute([$project_id, time()]);
 }
 
-// ─── Routing ────────────────────────────────────────────────────────────────
+// ─── Routing ─────────────────────────────────────────────────────────────────
 $method = $_SERVER['REQUEST_METHOD'];
 
-if ($method === 'GET' && isset($_GET['download']))        { serveFile($_GET['download']); }
-if ($method === 'GET' && isset($_GET['logs']))            { getLogs(); }
-if ($method === 'GET' && isset($_GET['replies']))         { getReplies(intval($_GET['replies'])); }
-if ($method === 'GET' && isset($_GET['projects']))        { getProjects(); }
-if ($method === 'GET' && isset($_GET['check_project']))   { checkProject($_GET['check_project']); }
+if ($method === 'GET'  && isset($_GET['download']))       { serveFile($_GET['download']); }
+if ($method === 'GET'  && isset($_GET['logs']))           { getLogs(); }
+if ($method === 'GET'  && isset($_GET['replies']))        { getReplies(intval($_GET['replies'])); }
+if ($method === 'GET'  && isset($_GET['projects']))       { getProjects(); }
+if ($method === 'GET'  && isset($_GET['check_project']))  { checkProject($_GET['check_project']); }
+if ($method === 'GET'  && isset($_GET['intervenants']))   { getIntervenants(); }
 if ($method === 'POST' && isset($_GET['archive']))        { archiveProject(); }
 if ($method === 'POST' && isset($_GET['unarchive']))      { unarchiveProject(); }
+if ($method === 'POST' && isset($_GET['intervenant']))    { saveIntervenant(); }
+if ($method === 'DELETE' && isset($_GET['intervenant']))  { deleteIntervenant(); }
+if ($method === 'POST' && isset($_GET['notif_settings'])) { saveNotifSettings(); }
+if ($method === 'GET'  && isset($_GET['notif_settings'])) { getNotifSettings(); }
 
 switch ($method) {
     case 'GET':
         if (isset($_GET['all'])) {
-            $archived = isset($_GET['archived']) ? 1 : 0;
+            $archived = isset($_GET['archived']) ? true : false;
             if ($archived) {
-                // Projets archivés
                 $stmt = $db->query("SELECT project_id FROM projects WHERE status = 'archived'");
                 $archived_ids = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'project_id');
                 if (empty($archived_ids)) { json_ok(['annotations' => [], 'count' => 0]); }
@@ -117,7 +155,6 @@ switch ($method) {
                 $stmt = $db->prepare("SELECT * FROM annotations WHERE project_id IN ($placeholders) ORDER BY created_at DESC");
                 $stmt->execute($archived_ids);
             } else {
-                // Projets actifs uniquement
                 $stmt = $db->prepare("
                     SELECT a.* FROM annotations a
                     LEFT JOIN projects p ON a.project_id = p.project_id
@@ -134,6 +171,12 @@ switch ($method) {
                 $s2 = $db->prepare('SELECT * FROM replies WHERE annotation_id = ? ORDER BY created_at ASC');
                 $s2->execute([$row['id']]);
                 $row['replies'] = $s2->fetchAll(PDO::FETCH_ASSOC);
+                // Intervenant assigné
+                if ($row['assigned_to']) {
+                    $si = $db->prepare('SELECT prenom, poste FROM intervenants WHERE id = ?');
+                    $si->execute([$row['assigned_to']]);
+                    $row['intervenant'] = $si->fetch(PDO::FETCH_ASSOC);
+                }
             }
             json_ok(['annotations' => $rows, 'count' => count($rows)]);
         }
@@ -141,7 +184,6 @@ switch ($method) {
         $project_id = $_GET['project_id'] ?? '';
         $page_url   = $_GET['page_url']   ?? '';
         if (!$project_id) json_error('project_id requis');
-
         $sql    = 'SELECT * FROM annotations WHERE project_id = ?';
         $params = [$project_id];
         if ($page_url) { $sql .= ' AND page_url = ?'; $params[] = $page_url; }
@@ -184,10 +226,10 @@ switch ($method) {
         $xpath        = sanitize($_POST['xpath']        ?? '');
         $rel_x        = floatval($_POST['rel_x']        ?? 0.5);
         $rel_y        = floatval($_POST['rel_y']        ?? 0.5);
+        $assigned_to  = intval($_POST['assigned_to']    ?? 0);
 
         if (!$project_id || !$page_url || !$author_name || !$comment) json_error('Champs requis manquants');
 
-        // Vérifier que le projet n'est pas archivé
         $stmt = $db->prepare("SELECT status FROM projects WHERE project_id = ?");
         $stmt->execute([$project_id]);
         $proj = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -209,10 +251,27 @@ switch ($method) {
         }
 
         $now  = time();
-        $stmt = $db->prepare("INSERT INTO annotations (project_id, page_url, author_name, author_email, author_token, comment, pos_x, pos_y, xpath, rel_x, rel_y, status, file_name, file_path, file_size, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?,?)");
-        $stmt->execute([$project_id, $page_url, $author_name, $author_email, $author_token, $comment, $pos_x, $pos_y, $xpath, $rel_x, $rel_y, $file_name, $file_path, $file_size, $now, $now]);
+        $stmt = $db->prepare("
+            INSERT INTO annotations
+            (project_id, page_url, author_name, author_email, author_token, comment,
+             pos_x, pos_y, xpath, rel_x, rel_y, status, file_name, file_path, file_size,
+             assigned_to, created_at, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,'open',?,?,?,?,?,?)
+        ");
+        $stmt->execute([
+            $project_id, $page_url, $author_name, $author_email, $author_token, $comment,
+            $pos_x, $pos_y, $xpath, $rel_x, $rel_y,
+            $file_name, $file_path, $file_size,
+            $assigned_to, $now, $now
+        ]);
         $id = $db->lastInsertId();
         addLog('create', $project_id, $author_name, "Annotation #$id sur $page_url");
+
+        // Envoyer notification si intervenant assigné
+        if ($assigned_to) {
+            sendNotificationIfNeeded($db, $project_id, $assigned_to, $id, $author_name, $comment, $page_url);
+        }
+
         json_ok(['id' => $id, 'message' => 'Annotation créée'], 201);
         break;
 
@@ -257,15 +316,240 @@ switch ($method) {
         json_error('Méthode non supportée', 405);
 }
 
-// ─── Fonctions ───────────────────────────────────────────────────────────────
+// ─── Intervenants ─────────────────────────────────────────────────────────────
+function getIntervenants() {
+    global $db;
+    $stmt = $db->query("SELECT * FROM intervenants ORDER BY prenom ASC");
+    json_ok(['intervenants' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+}
+
+function saveIntervenant() {
+    global $db;
+    $body  = json_decode(file_get_contents('php://input'), true);
+    $id     = intval($body['id']    ?? 0);
+    $prenom = sanitize($body['prenom'] ?? '');
+    $poste  = sanitize($body['poste']  ?? '');
+    $email  = sanitize($body['email']  ?? '');
+    $actif  = intval($body['actif']  ?? 1);
+    if (!$prenom || !$email) json_error('Prénom et email requis');
+    if ($id) {
+        $db->prepare("UPDATE intervenants SET prenom=?, poste=?, email=?, actif=? WHERE id=?")
+           ->execute([$prenom, $poste, $email, $actif, $id]);
+        json_ok(['message' => 'Intervenant mis à jour']);
+    } else {
+        $db->prepare("INSERT INTO intervenants (prenom, poste, email, actif, created_at) VALUES (?,?,?,?,?)")
+           ->execute([$prenom, $poste, $email, $actif, time()]);
+        json_ok(['id' => $db->lastInsertId(), 'message' => 'Intervenant créé'], 201);
+    }
+}
+
+function deleteIntervenant() {
+    global $db;
+    $id = intval($_GET['intervenant'] ?? 0);
+    if (!$id) json_error('id requis');
+    $db->prepare("DELETE FROM intervenants WHERE id = ?")->execute([$id]);
+    json_ok(['message' => 'Intervenant supprimé']);
+}
+
+// ─── Paramètres notifications ─────────────────────────────────────────────────
+function getNotifSettings() {
+    global $db;
+    $intervenant_id = intval($_GET['notif_settings'] ?? 0);
+    if (!$intervenant_id) {
+        $stmt = $db->query("SELECT * FROM notification_settings");
+    } else {
+        $stmt = $db->prepare("SELECT * FROM notification_settings WHERE intervenant_id = ?");
+        $stmt->execute([$intervenant_id]);
+    }
+    json_ok(['settings' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+}
+
+function saveNotifSettings() {
+    global $db;
+    $body           = json_decode(file_get_contents('php://input'), true);
+    $intervenant_id = intval($body['intervenant_id'] ?? 0);
+    $project_id     = sanitize($body['project_id']   ?? '');
+    $enabled        = intval($body['enabled']        ?? 1);
+    $cooldown_hours = intval($body['cooldown_hours'] ?? 24);
+    if (!$intervenant_id) json_error('intervenant_id requis');
+    $db->prepare("INSERT INTO notification_settings (intervenant_id, project_id, enabled, cooldown_hours)
+                  VALUES (?,?,?,?)
+                  ON CONFLICT(intervenant_id, project_id) DO UPDATE SET enabled=?, cooldown_hours=?")
+       ->execute([$intervenant_id, $project_id, $enabled, $cooldown_hours, $enabled, $cooldown_hours]);
+    json_ok(['message' => 'Paramètres sauvegardés']);
+}
+
+// ─── Envoi notification email ─────────────────────────────────────────────────
+function sendNotificationIfNeeded($db, $project_id, $intervenant_id, $annotation_id, $author_name, $comment, $page_url) {
+    // Récupérer l'intervenant
+    $stmt = $db->prepare("SELECT * FROM intervenants WHERE id = ? AND actif = 1");
+    $stmt->execute([$intervenant_id]);
+    $interv = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$interv) return;
+
+    // Récupérer les paramètres de notification
+    $stmt = $db->prepare("SELECT * FROM notification_settings WHERE intervenant_id = ? AND project_id = ?");
+    $stmt->execute([$intervenant_id, $project_id]);
+    $settings = $stmt->fetch(PDO::FETCH_ASSOC);
+    $enabled        = $settings ? (bool)$settings['enabled']        : true;
+    $cooldown_hours = $settings ? (int)$settings['cooldown_hours']  : 24;
+
+    if (!$enabled) return;
+
+    // Vérifier le cooldown
+    $stmt = $db->prepare("SELECT last_sent_at FROM notifications WHERE project_id = ? AND intervenant_id = ?");
+    $stmt->execute([$project_id, $intervenant_id]);
+    $notif = $stmt->fetch(PDO::FETCH_ASSOC);
+    $cooldown_secs = $cooldown_hours * 3600;
+
+    if ($notif && (time() - $notif['last_sent_at']) < $cooldown_secs) return; // Cooldown pas écoulé
+
+    // Envoyer l'email
+    $sent = sendEmail(
+        $interv['email'],
+        $interv['prenom'],
+        $project_id,
+        $annotation_id,
+        $author_name,
+        $comment,
+        $page_url
+    );
+
+    if ($sent) {
+        // Mettre à jour la date du dernier envoi
+        $db->prepare("INSERT INTO notifications (project_id, intervenant_id, last_sent_at)
+                      VALUES (?,?,?)
+                      ON CONFLICT(project_id, intervenant_id) DO UPDATE SET last_sent_at=?")
+           ->execute([$project_id, $intervenant_id, time(), time()]);
+        addLog('notification', $project_id, $interv['prenom'], "Email envoyé à {$interv['email']} pour annotation #$annotation_id");
+    }
+}
+
+function sendEmail($to_email, $to_name, $project_id, $annotation_id, $author_name, $comment, $page_url) {
+    $subject = "[$project_id] Nouveau commentaire client — UX Note Cloud";
+    $dashboard_url = (isset($_SERVER['HTTPS']) ? 'https' : 'http') . '://' . $_SERVER['HTTP_HOST'] . '/';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f4f5f7;font-family:\'Montserrat\',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 0;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(34,35,57,0.1);">
+  <tr><td style="background:#222339;padding:24px 32px;border-bottom:4px solid #3ce65f;">
+    <p style="margin:0;font-family:Georgia,serif;font-size:20px;font-weight:700;color:#fff;letter-spacing:0.02em;">UX Note Cloud</p>
+    <p style="margin:4px 0 0;font-size:12px;color:#9b9dba;">Relecture collaborative — Équinoxes</p>
+  </td></tr>
+  <tr><td style="padding:28px 32px;">
+    <p style="margin:0 0 8px;font-size:13px;color:#757686;">Bonjour <strong style="color:#222339;">' . htmlspecialchars($to_name) . '</strong>,</p>
+    <p style="margin:0 0 20px;font-size:14px;color:#222339;">Un nouveau commentaire a été déposé sur le projet <strong>' . htmlspecialchars($project_id) . '</strong> et vous a été assigné.</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;border-radius:8px;padding:16px;margin-bottom:20px;border-left:4px solid #222339;">
+      <tr><td>
+        <p style="margin:0 0 6px;font-size:11px;color:#757686;text-transform:uppercase;letter-spacing:0.06em;">Commentaire #' . $annotation_id . '</p>
+        <p style="margin:0 0 10px;font-size:14px;color:#222339;line-height:1.6;">' . nl2br(htmlspecialchars($comment)) . '</p>
+        <p style="margin:0;font-size:12px;color:#757686;">Par <strong>' . htmlspecialchars($author_name) . '</strong> sur <a href="' . htmlspecialchars($page_url) . '" style="color:#3ce65f;">' . htmlspecialchars($page_url) . '</a></p>
+      </td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="48%">
+          <a href="' . $dashboard_url . '" style="display:block;background:#222339;color:#fff;text-align:center;padding:12px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;border-left:3px solid #3ce65f;">
+            📋 Voir le dashboard
+          </a>
+        </td>
+        <td width="4%"></td>
+        <td width="48%">
+          <a href="' . htmlspecialchars($page_url) . '" style="display:block;background:#f4f5f7;color:#222339;text-align:center;padding:12px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;border:1px solid #e2e4ef;">
+            🌐 Voir la page
+          </a>
+        </td>
+      </tr>
+    </table>
+  </td></tr>
+  <tr><td style="background:#f8f9fc;padding:16px 32px;border-top:1px solid #e2e4ef;">
+    <p style="margin:0;font-size:11px;color:#9b9dba;text-align:center;">Équinoxes · UX Note Cloud · <a href="' . $dashboard_url . '" style="color:#3ce65f;text-decoration:none;">Gérer les notifications</a></p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>';
+
+    return sendSmtp($to_email, $subject, $html);
+}
+
+function sendSmtp($to, $subject, $html) {
+    $host     = SMTP_HOST;
+    $port     = SMTP_PORT;
+    $username = SMTP_USER;
+    $password = SMTP_PASS;
+    $from     = SMTP_FROM;
+    $from_name = SMTP_FROM_NAME;
+
+    try {
+        $socket = @fsockopen('tls://' . $host, $port, $errno, $errstr, 10);
+        if (!$socket) {
+            // Essayer sans TLS sur port 587
+            $socket = @fsockopen($host, $port, $errno, $errstr, 10);
+            if (!$socket) return false;
+        }
+
+        $read = fgets($socket, 512);
+        if (strpos($read, '220') !== 0) { fclose($socket); return false; }
+
+        $cmds = [
+            "EHLO " . gethostname() . "\r\n",
+        ];
+
+        foreach ($cmds as $cmd) {
+            fputs($socket, $cmd);
+            $read = fgets($socket, 512);
+        }
+
+        // AUTH LOGIN
+        fputs($socket, "AUTH LOGIN\r\n");
+        fgets($socket, 512);
+        fputs($socket, base64_encode($username) . "\r\n");
+        fgets($socket, 512);
+        fputs($socket, base64_encode($password) . "\r\n");
+        $auth = fgets($socket, 512);
+        if (strpos($auth, '235') === false) { fclose($socket); return false; }
+
+        $boundary = md5(time());
+        $headers  = "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <$from>\r\n";
+        $headers .= "To: $to\r\n";
+        $headers .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
+        $headers .= "MIME-Version: 1.0\r\n";
+        $headers .= "Content-Type: multipart/alternative; boundary=\"$boundary\"\r\n";
+        $headers .= "Date: " . date('r') . "\r\n";
+
+        $body  = "--$boundary\r\n";
+        $body .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n";
+        $body .= strip_tags($html) . "\r\n";
+        $body .= "--$boundary\r\n";
+        $body .= "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+        $body .= $html . "\r\n";
+        $body .= "--$boundary--\r\n";
+
+        fputs($socket, "MAIL FROM: <$from>\r\n"); fgets($socket, 512);
+        fputs($socket, "RCPT TO: <$to>\r\n");     fgets($socket, 512);
+        fputs($socket, "DATA\r\n");               fgets($socket, 512);
+        fputs($socket, $headers . "\r\n" . $body . "\r\n.\r\n");
+        $sent = fgets($socket, 512);
+        fputs($socket, "QUIT\r\n");
+        fclose($socket);
+
+        return strpos($sent, '250') !== false;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+// ─── Autres fonctions ─────────────────────────────────────────────────────────
 function getProjects() {
     global $db;
     $stmt = $db->query("
         SELECT p.*, COUNT(a.id) as annotation_count
-        FROM projects p
-        LEFT JOIN annotations a ON a.project_id = p.project_id
-        GROUP BY p.project_id
-        ORDER BY p.status ASC, p.created_at DESC
+        FROM projects p LEFT JOIN annotations a ON a.project_id = p.project_id
+        GROUP BY p.project_id ORDER BY p.status ASC, p.created_at DESC
     ");
     json_ok(['projects' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
 }
@@ -274,7 +558,7 @@ function checkProject($project_id) {
     global $db;
     $stmt = $db->prepare("SELECT status FROM projects WHERE project_id = ?");
     $stmt->execute([$project_id]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $row    = $stmt->fetch(PDO::FETCH_ASSOC);
     $status = $row ? $row['status'] : 'active';
     json_ok(['status' => $status, 'archived' => ($status === 'archived')]);
 }
@@ -282,22 +566,22 @@ function checkProject($project_id) {
 function archiveProject() {
     global $db;
     $body = json_decode(file_get_contents('php://input'), true);
-    $project_id = sanitize($body['project_id'] ?? '');
-    if (!$project_id) json_error('project_id requis');
-    $db->prepare("INSERT OR IGNORE INTO projects (project_id, status, created_at) VALUES (?, 'active', ?)")->execute([$project_id, time()]);
-    $db->prepare("UPDATE projects SET status = 'archived', archived_at = ? WHERE project_id = ?")->execute([time(), $project_id]);
-    addLog('archive', $project_id, 'Dashboard', "Projet '$project_id' archivé");
-    json_ok(['message' => "Projet '$project_id' archivé"]);
+    $pid  = sanitize($body['project_id'] ?? '');
+    if (!$pid) json_error('project_id requis');
+    $db->prepare("INSERT OR IGNORE INTO projects (project_id, status, created_at) VALUES (?, 'active', ?)")->execute([$pid, time()]);
+    $db->prepare("UPDATE projects SET status = 'archived', archived_at = ? WHERE project_id = ?")->execute([time(), $pid]);
+    addLog('archive', $pid, 'Dashboard', "Projet '$pid' archivé");
+    json_ok(['message' => "Projet '$pid' archivé"]);
 }
 
 function unarchiveProject() {
     global $db;
     $body = json_decode(file_get_contents('php://input'), true);
-    $project_id = sanitize($body['project_id'] ?? '');
-    if (!$project_id) json_error('project_id requis');
-    $db->prepare("UPDATE projects SET status = 'active', archived_at = 0 WHERE project_id = ?")->execute([$project_id]);
-    addLog('unarchive', $project_id, 'Dashboard', "Projet '$project_id' réouvert");
-    json_ok(['message' => "Projet '$project_id' réouvert"]);
+    $pid  = sanitize($body['project_id'] ?? '');
+    if (!$pid) json_error('project_id requis');
+    $db->prepare("UPDATE projects SET status = 'active', archived_at = 0 WHERE project_id = ?")->execute([$pid]);
+    addLog('unarchive', $pid, 'Dashboard', "Projet '$pid' réouvert");
+    json_ok(['message' => "Projet '$pid' réouvert"]);
 }
 
 function getReplies($annotation_id) {
@@ -311,27 +595,19 @@ function getLogs() {
     global $db;
     $date_from = isset($_GET['date_from']) ? intval($_GET['date_from']) : 0;
     $date_to   = isset($_GET['date_to'])   ? intval($_GET['date_to'])   : 0;
-    $archived  = isset($_GET['archived'])  ? 1 : 0;
-
-    $sql    = 'SELECT * FROM logs WHERE 1=1';
-    $params = [];
-
-    if ($date_from) { $sql .= ' AND created_at >= ?'; $params[] = $date_from; }
-    if ($date_to)   { $sql .= ' AND created_at <= ?'; $params[] = $date_to + 86400; }
-
+    $archived  = isset($_GET['archived'])  ? true : false;
+    $sql = 'SELECT * FROM logs WHERE 1=1'; $params = []; $i = 1;
+    if ($date_from) { $sql .= " AND created_at >= ?"; $params[] = $date_from; }
+    if ($date_to)   { $sql .= " AND created_at <= ?"; $params[] = $date_to + 86400; }
     if ($archived) {
-        // Logs des projets archivés
         $stmt2 = $db->query("SELECT project_id FROM projects WHERE status = 'archived'");
         $ids   = array_column($stmt2->fetchAll(PDO::FETCH_ASSOC), 'project_id');
         if (!empty($ids)) {
-            $pl   = implode(',', array_fill(0, count($ids), '?'));
+            $pl = implode(',', array_fill(0, count($ids), '?'));
             $sql .= " AND project_id IN ($pl)";
             $params = array_merge($params, $ids);
-        } else {
-            json_ok(['logs' => []]);
-        }
+        } else { json_ok(['logs' => []]); }
     }
-
     $sql .= ' ORDER BY created_at DESC LIMIT 500';
     $stmt = $db->prepare($sql);
     $stmt->execute($params);
@@ -350,8 +626,7 @@ function serveFile($safe_name) {
     header('Content-Type: application/octet-stream');
     header('Content-Disposition: attachment; filename="' . addslashes($name) . '"');
     header('Content-Length: ' . filesize($path));
-    readfile($path);
-    exit;
+    readfile($path); exit;
 }
 
 function addLog($action, $project_id, $author_name, $detail) {
@@ -360,17 +635,6 @@ function addLog($action, $project_id, $author_name, $detail) {
        ->execute([$action, $project_id, $author_name, $detail, time()]);
 }
 
-function sanitize($val) {
-    // strip_tags uniquement — le JS gère l'échappement à l'affichage via escHtml()
-    return strip_tags(trim((string)$val));
-}
-function json_ok($data, $code = 200) {
-    http_response_code($code);
-    echo json_encode(array_merge(['success' => true], $data));
-    exit;
-}
-function json_error($msg, $code = 400) {
-    http_response_code($code);
-    echo json_encode(['success' => false, 'error' => $msg]);
-    exit;
-}
+function sanitize($val) { return strip_tags(trim((string)$val)); }
+function json_ok($data, $code = 200) { http_response_code($code); echo json_encode(array_merge(['success' => true], $data)); exit; }
+function json_error($msg, $code = 400) { http_response_code($code); echo json_encode(['success' => false, 'error' => $msg]); exit; }
