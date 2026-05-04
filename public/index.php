@@ -218,7 +218,8 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     <div class="toolbar">
       <input type="text" id="filter-text" placeholder="🔍 Rechercher..." oninput="applyFilters()" />
       <select id="filter-project" onchange="applyFilters()"><option value="">Tous les projets</option></select>
-      <select id="filter-author"  onchange="applyFilters()"><option value="">Tous les auteurs</option></select>
+      <select id="filter-author"      onchange="applyFilters()"><option value="">Tous les auteurs</option></select>
+      <select id="filter-intervenant" onchange="applyFilters()"><option value="">Tous les destinataires</option></select>
       <select id="filter-status"  onchange="applyFilters()">
         <option value="">Tous les statuts</option>
         <option value="open">En cours</option>
@@ -235,6 +236,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
             <th class="sortable" onclick="sortBy('project_id')">Projet</th>
             <th class="sortable" onclick="sortBy('page_url')">Page</th>
             <th class="sortable" onclick="sortBy('author_name')">Auteur</th>
+            <th class="sortable" onclick="sortBy('assigned_to')">Destinataire</th>
             <th>Commentaire</th>
             <th class="sortable" onclick="sortBy('file_name')">Fichier</th>
             <th class="sortable" onclick="sortBy('status')">Statut</th>
@@ -403,7 +405,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
         + '</div>'
         + '<div style="display:flex;gap:6px">'
         + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="editIntervenant(' + i.id + ')">✏️</button>'
-        + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="toggleIntervenant(' + i.id + ',' + i.actif + ')">' + toggle + '</button>'
+        + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px;width:auto;min-width:0" onclick="toggleIntervenant(' + i.id + ',' + i.actif + ')">' + toggle + '</button>'
         + '<button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="deleteIntervenant(' + i.id + ')">🗑</button>'
         + '</div>'
         + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="showNotifSettings(' + i.id + ',\'' + esc(i.prenom) + '\')">🔔</button>'
@@ -504,6 +506,28 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     toast('✅ Paramètre sauvegardé');
   }
 
+  async function changeIntervenant(annotationId) {
+    const sel = document.getElementById('interv-select-' + annotationId);
+    if (!sel) return;
+    const assigned_to = parseInt(sel.value) || 0;
+    const res = await fetch(API + '?change_intervenant=1', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ annotation_id: annotationId, assigned_to })
+    });
+    const data = await res.json();
+    const msg = document.getElementById('interv-msg-' + annotationId);
+    if (msg) { msg.style.display='inline'; setTimeout(()=>msg.style.display='none', 3000); }
+    // Mettre à jour localement sans recharger toute la page
+    const a = allAnnotations.find(x => x.id == annotationId);
+    if (a) {
+      a.assigned_to = assigned_to;
+      const interv = allIntervenants.find(i => i.id == assigned_to);
+      a.intervenant = interv ? { prenom: interv.prenom, poste: interv.poste } : null;
+    }
+    toast(assigned_to ? '👤 Intervenant changé — email envoyé !' : '👤 Destinataire retiré');
+  }
+
   function sortBy(field) {
     if (sortField === field) {
       sortDir = sortDir === 'asc' ? 'desc' : 'asc';
@@ -556,28 +580,35 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   }
 
   function populateFilters() {
-    const projects = [...new Set(allAnnotations.map(a=>a.project_id))].sort();
-    const authors  = [...new Set(allAnnotations.map(a=>a.author_name))].sort();
+    const projects     = [...new Set(allAnnotations.map(a=>a.project_id))].sort();
+    const authors      = [...new Set(allAnnotations.map(a=>a.author_name))].sort();
+    const intervenants = [...new Set(allAnnotations.filter(a=>a.intervenant).map(a=>JSON.stringify({id:a.assigned_to,prenom:a.intervenant.prenom})))].map(s=>JSON.parse(s));
     const selP = document.getElementById('filter-project');
     const selA = document.getElementById('filter-author');
-    const curP = selP.value, curA = selA.value;
-    selP.innerHTML = '<option value="">Tous les projets</option>' + projects.map(p=>`<option value="${esc(p)}" ${p===curP?'selected':''}>${esc(p)}</option>`).join('');
-    selA.innerHTML = '<option value="">Tous les auteurs</option>'  + authors.map(a=>`<option value="${esc(a)}" ${a===curA?'selected':''}>${esc(a)}</option>`).join('');
+    const selI = document.getElementById('filter-intervenant');
+    const curP = selP.value, curA = selA.value, curI = selI ? selI.value : '';
+    selP.innerHTML = '<option value="">Tous les projets</option>'      + projects.map(p=>`<option value="${esc(p)}" ${p===curP?'selected':''}>${esc(p)}</option>`).join('');
+    selA.innerHTML = '<option value="">Tous les auteurs</option>'       + authors.map(a=>`<option value="${esc(a)}" ${a===curA?'selected':''}>${esc(a)}</option>`).join('');
+    if (selI) selI.innerHTML = '<option value="">Tous les destinataires</option>' + intervenants.map(i=>`<option value="${i.id}" ${i.id==curI?'selected':''}>${esc(i.prenom)}</option>`).join('');
   }
 
   function applyFilters() {
-    const text    = document.getElementById('filter-text').value.toLowerCase();
-    const project = document.getElementById('filter-project').value;
-    const author  = document.getElementById('filter-author').value;
-    const status  = document.getElementById('filter-status').value;
+    const text        = document.getElementById('filter-text').value.toLowerCase();
+    const project     = document.getElementById('filter-project').value;
+    const author      = document.getElementById('filter-author').value;
+    const status      = document.getElementById('filter-status').value;
+    const selI        = document.getElementById('filter-intervenant');
+    const intervenant = selI ? selI.value : '';
     filtered = allAnnotations.filter(a => {
-      if (project && a.project_id  !== project) return false;
-      if (author  && a.author_name !== author)  return false;
-      if (status  && a.status      !== status)  return false;
+      if (project     && a.project_id   !== project)          return false;
+      if (author      && a.author_name  !== author)           return false;
+      if (status      && a.status       !== status)           return false;
+      if (intervenant && String(a.assigned_to) !== intervenant) return false;
       if (text) {
-        const searchId = text.replace(/^#/, ''); // accepte "38" ou "#38"
-        const matchId  = String(a.id) === searchId || ('#'+a.id) === text;
-        if (!matchId &&
+        const searchId    = text.replace(/^#/, '');
+        const matchId     = String(a.id) === searchId || ('#'+a.id) === text;
+        const matchInterv = a.intervenant && a.intervenant.prenom.toLowerCase().includes(text);
+        if (!matchId && !matchInterv &&
             !a.comment.toLowerCase().includes(text) &&
             !a.author_name.toLowerCase().includes(text) &&
             !a.page_url.toLowerCase().includes(text) &&
@@ -620,7 +651,11 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
           <td>
             <div style="font-weight:600">${esc(a.author_name)}</div>
             ${a.author_email?`<div style="font-size:11px;color:#757686">${esc(a.author_email)}</div>`:''}
-            ${a.intervenant?`<div style="font-size:11px;color:#3ce65f;margin-top:2px">👤 ${esc(a.intervenant.prenom)}</div>`:''}
+          </td>
+          <td>
+            ${a.intervenant
+              ? '<span style="background:#f0f9f1;color:#222339;padding:3px 8px;border-radius:5px;font-size:12px;font-weight:600;border-left:3px solid #3ce65f">👤 ' + esc(a.intervenant.prenom) + '</span>'
+              : '<span style="color:#e2e4ef">—</span>'}
           </td>
           <td>
             <div class="comment-preview" title="${esc(a.comment)}">${esc(a.comment)}</div>
@@ -652,6 +687,15 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
                 <div class="detail-comment">${esc(a.comment)}</div>
                 ${a.file_name?`<div style="margin-bottom:10px"><button class="btn btn-download" style="font-size:12px" onclick="downloadFile('${esc(a.file_path)}')">⬇ ${esc(a.file_name)}</button></div>`:''}
                 ${repliesHtml?`<div class="detail-replies"><h4>↩ Réponses (${replies.length})</h4>${repliesHtml}</div>`:''}
+                <div style="margin-top:12px;padding-top:12px;border-top:1px dashed #e2e4ef;display:flex;align-items:center;gap:10px">
+                  <span style="font-size:12px;color:#757686;font-weight:600">👤 Destinataire :</span>
+                  <select id="interv-select-${a.id}" style="padding:6px 10px;border:1px solid #e2e4ef;border-radius:8px;font-size:12px;font-family:'Montserrat',sans-serif;outline:none;color:#222339" onchange="">
+                    <option value="0">— Non assigné —</option>
+                    ${allIntervenants.filter(i=>i.actif).map(i=>`<option value="${i.id}" ${a.assigned_to==i.id?'selected':''}>${esc(i.prenom)}${i.poste?' ('+esc(i.poste)+')':''}</option>`).join('')}
+                  </select>
+                  <button class="btn btn-primary" style="padding:5px 12px;font-size:12px" onclick="changeIntervenant(${a.id})">💾 Changer</button>
+                  <span id="interv-msg-${a.id}" style="font-size:11px;color:#3ce65f;display:none">✓ Envoyé !</span>
+                </div>
               </div>
             </td>
           </tr>`;
@@ -901,6 +945,8 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   }
 
   loadAll();
+  // Charger les intervenants au démarrage pour le select dans le tableau
+  fetch(API + '?intervenants=1').then(r=>r.json()).then(d=>{ allIntervenants = d.intervenants || []; });
 
   // Pause du refresh si l'utilisateur interagit — évite de perdre sa pagination
   let userActive = false;
