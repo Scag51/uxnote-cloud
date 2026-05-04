@@ -406,7 +406,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
         + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="toggleIntervenant(' + i.id + ',' + i.actif + ')">' + toggle + '</button>'
         + '<button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="deleteIntervenant(' + i.id + ')">🗑</button>'
         + '</div>'
-        + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="showNotifSettings(' + i.id + ','' + esc(i.prenom) + '')">🔔</button>'
+        + '<button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="showNotifSettings(' + i.id + ',\'' + esc(i.prenom) + '\')">🔔</button>'
         + '</div>';
     }).join('');
   }
@@ -427,7 +427,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     document.getElementById('interv-prenom').value = i.prenom;
     document.getElementById('interv-poste').value  = i.poste;
     document.getElementById('interv-email').value  = i.email;
-    document.getElementById('interv-form-title').textContent = '✏️ Modifier l'intervenant';
+    document.getElementById('interv-form-title').textContent = "✏️ Modifier l'intervenant";
     document.getElementById('interv-cancel-btn').style.display = 'inline-flex';
   }
 
@@ -488,7 +488,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
         + '<label style="font-size:12px;color:#757686;display:flex;align-items:center;gap:6px">Cooldown :'
         + '<select id="notif-hours-' + intervenant_id + '-' + p + '" style="padding:4px 8px;border:1px solid #e2e4ef;border-radius:6px;font-size:12px">' + opts + '</select>'
         + '</label>'
-        + '<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="saveNotifSetting(' + intervenant_id + ','' + p + '')">💾</button>'
+        + '<button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="saveNotifSetting(' + intervenant_id + ',\'' + p + '\')">💾</button>'
         + '</div>';
     }).join('');
     el.innerHTML = '<p style="font-size:13px;font-weight:600;color:#222339;margin-bottom:16px">Notifications pour <strong>' + esc(prenom) + '</strong></p>' + rows;
