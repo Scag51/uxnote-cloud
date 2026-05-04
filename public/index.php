@@ -201,9 +201,10 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
 
 <div class="container">
   <div class="tabs">
-    <button class="tab-btn active"   onclick="switchTab('annotations',this)">📋 Annotations</button>
-    <button class="tab-btn"          onclick="switchTab('logs',this)">📜 Journal</button>
+    <button class="tab-btn active"      onclick="switchTab('annotations',this)">📋 Annotations</button>
+    <button class="tab-btn"             onclick="switchTab('logs',this)">📜 Journal</button>
     <button class="tab-btn archive-tab" onclick="switchTab('archives',this)">📦 Archives</button>
+    <button class="tab-btn"             onclick="switchTab('intervenants',this)">👥 Intervenants</button>
   </div>
 
   <!-- ── TAB ANNOTATIONS ── -->
@@ -302,6 +303,46 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
       </div>
     </div>
   </div>
+  <!-- ── TAB INTERVENANTS ── -->
+  <div id="tab-intervenants" class="tab-content">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+      <!-- Formulaire ajout/édition -->
+      <div class="table-wrap" style="padding:24px">
+        <h3 style="font-family:'Raleway',sans-serif;font-size:16px;margin-bottom:20px;color:#222339" id="interv-form-title">➕ Ajouter un intervenant</h3>
+        <input type="hidden" id="interv-id" value="">
+        <div style="margin-bottom:12px">
+          <label style="font-size:12px;color:#757686;font-weight:600;display:block;margin-bottom:4px">Prénom *</label>
+          <input type="text" id="interv-prenom" placeholder="Prénom" style="width:100%;padding:9px 12px;border:1px solid #e2e4ef;border-radius:8px;font-size:13px;font-family:'Montserrat',sans-serif;outline:none;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="font-size:12px;color:#757686;font-weight:600;display:block;margin-bottom:4px">Poste</label>
+          <input type="text" id="interv-poste" placeholder="ex: Développeur, Chef de projet..." style="width:100%;padding:9px 12px;border:1px solid #e2e4ef;border-radius:8px;font-size:13px;font-family:'Montserrat',sans-serif;outline:none;box-sizing:border-box">
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;color:#757686;font-weight:600;display:block;margin-bottom:4px">Email *</label>
+          <input type="email" id="interv-email" placeholder="prenom@equinoxes.fr" style="width:100%;padding:9px 12px;border:1px solid #e2e4ef;border-radius:8px;font-size:13px;font-family:'Montserrat',sans-serif;outline:none;box-sizing:border-box">
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="saveIntervenant()" style="flex:1">💾 Sauvegarder</button>
+          <button class="btn btn-ghost" onclick="resetIntervForm()" id="interv-cancel-btn" style="display:none">✕ Annuler</button>
+        </div>
+      </div>
+
+      <!-- Liste intervenants -->
+      <div class="table-wrap" style="padding:24px">
+        <h3 style="font-family:'Raleway',sans-serif;font-size:16px;margin-bottom:20px;color:#222339">👥 Équipe Équinoxes</h3>
+        <div id="interv-list"><p style="color:#757686;font-size:13px">Chargement…</p></div>
+      </div>
+    </div>
+
+    <!-- Paramètres notifications par intervenant -->
+    <div class="table-wrap" style="margin-top:24px;padding:24px">
+      <h3 style="font-family:'Raleway',sans-serif;font-size:16px;margin-bottom:6px;color:#222339">🔔 Paramètres de notifications</h3>
+      <p style="font-size:13px;color:#757686;margin-bottom:20px">Configurez le délai de cooldown entre deux emails pour chaque intervenant (par défaut : 24h par projet).</p>
+      <div id="notif-settings-list"><p style="color:#757686;font-size:13px">Sélectionnez un intervenant pour configurer.</p></div>
+    </div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -332,6 +373,134 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
   let sortField = 'created_at', sortDir = 'desc';
 
   // ── Chargement actif ──
+  // ── Intervenants ──
+  let allIntervenants = [];
+
+  async function loadIntervenants() {
+    try {
+      const res  = await fetch(`${API}?intervenants=1`);
+      const data = await res.json();
+      allIntervenants = data.intervenants || [];
+      renderIntervList();
+    } catch(e) {}
+  }
+
+  function renderIntervList() {
+    const el = document.getElementById('interv-list');
+    if (!el) return;
+    if (!allIntervenants.length) { el.innerHTML = '<p style="color:#757686;font-size:13px">Aucun intervenant. Ajoutez-en un !</p>'; return; }
+    el.innerHTML = allIntervenants.map(i => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f4f5f7">
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13px;color:#222339">${esc(i.prenom)} ${i.actif?'':'<span style="color:#e63946;font-size:11px">(inactif)</span>'}</div>
+          <div style="font-size:11px;color:#757686">${i.poste?esc(i.poste)+' · ':''}${esc(i.email)}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="editIntervenant(${i.id})">✏️</button>
+          <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="toggleIntervenant(${i.id},${i.actif})">${i.actif?'⏸':'▶'}</button>
+          <button class="btn btn-danger" style="padding:4px 8px;font-size:11px" onclick="deleteIntervenant(${i.id})">🗑</button>
+        </div>
+        <button class="btn btn-ghost" style="padding:4px 8px;font-size:11px" onclick="showNotifSettings(${i.id},'${esc(i.prenom)}')">🔔</button>
+      </div>`).join('');
+  }
+
+  function resetIntervForm() {
+    document.getElementById('interv-id').value    = '';
+    document.getElementById('interv-prenom').value = '';
+    document.getElementById('interv-poste').value  = '';
+    document.getElementById('interv-email').value  = '';
+    document.getElementById('interv-form-title').textContent = '➕ Ajouter un intervenant';
+    document.getElementById('interv-cancel-btn').style.display = 'none';
+  }
+
+  function editIntervenant(id) {
+    const i = allIntervenants.find(x => x.id == id);
+    if (!i) return;
+    document.getElementById('interv-id').value    = i.id;
+    document.getElementById('interv-prenom').value = i.prenom;
+    document.getElementById('interv-poste').value  = i.poste;
+    document.getElementById('interv-email').value  = i.email;
+    document.getElementById('interv-form-title').textContent = '✏️ Modifier l'intervenant';
+    document.getElementById('interv-cancel-btn').style.display = 'inline-flex';
+  }
+
+  async function saveIntervenant() {
+    const id     = document.getElementById('interv-id').value;
+    const prenom = document.getElementById('interv-prenom').value.trim();
+    const poste  = document.getElementById('interv-poste').value.trim();
+    const email  = document.getElementById('interv-email').value.trim();
+    if (!prenom || !email) { alert('Prénom et email requis'); return; }
+    await fetch(API + '?intervenant=1', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id: id ? parseInt(id) : 0, prenom, poste, email, actif: 1 })
+    });
+    resetIntervForm();
+    await loadIntervenants();
+    toast('✅ Intervenant sauvegardé');
+  }
+
+  async function deleteIntervenant(id) {
+    if (!confirm('Supprimer cet intervenant ?')) return;
+    await fetch(`${API}?intervenant=${id}`, { method: 'DELETE' });
+    await loadIntervenants();
+    toast('🗑 Intervenant supprimé');
+  }
+
+  async function toggleIntervenant(id, actif) {
+    const i = allIntervenants.find(x => x.id == id);
+    if (!i) return;
+    await fetch(API + '?intervenant=1', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ id, prenom: i.prenom, poste: i.poste, email: i.email, actif: actif ? 0 : 1 })
+    });
+    await loadIntervenants();
+  }
+
+  async function showNotifSettings(intervenant_id, prenom) {
+    const el = document.getElementById('notif-settings-list');
+    el.innerHTML = `<p style="color:#757686;font-size:13px">Chargement des paramètres de <strong>${esc(prenom)}</strong>…</p>`;
+    const projects = [...new Set(allAnnotations.map(a => a.project_id))].sort();
+    const res  = await fetch(`${API}?notif_settings=${intervenant_id}`);
+    const data = await res.json();
+    const settings = {};
+    (data.settings || []).forEach(s => { settings[s.project_id] = s; });
+
+    el.innerHTML = `
+      <p style="font-size:13px;font-weight:600;color:#222339;margin-bottom:16px">Notifications pour <strong>${esc(prenom)}</strong></p>
+      ${projects.map(p => {
+        const s = settings[p] || { enabled: 1, cooldown_hours: 24 };
+        return `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f4f5f7">
+            <span class="project-tag" style="min-width:120px">${esc(p)}</span>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+              <input type="checkbox" ${s.enabled?'checked':''} id="notif-enabled-${intervenant_id}-${esc(p)}" style="accent-color:#3ce65f"> Actif
+            </label>
+            <label style="font-size:12px;color:#757686;display:flex;align-items:center;gap:6px">
+              Cooldown :
+              <select id="notif-hours-${intervenant_id}-${esc(p)}" style="padding:4px 8px;border:1px solid #e2e4ef;border-radius:6px;font-size:12px">
+                <option value="1" ${s.cooldown_hours==1?'selected':''}>1h</option>
+                <option value="4" ${s.cooldown_hours==4?'selected':''}>4h</option>
+                <option value="12" ${s.cooldown_hours==12?'selected':''}>12h</option>
+                <option value="24" ${s.cooldown_hours==24?'selected':''}>24h</option>
+                <option value="48" ${s.cooldown_hours==48?'selected':''}>48h</option>
+                <option value="0" ${s.cooldown_hours==0?'selected':''}>Toujours</option>
+              </select>
+            </label>
+            <button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="saveNotifSetting(${intervenant_id},'${esc(p)}')">💾</button>
+          </div>`;
+      }).join('')}`;
+  }
+
+  async function saveNotifSetting(intervenant_id, project_id) {
+    const enabled = document.getElementById(`notif-enabled-${intervenant_id}-${project_id}`)?.checked ? 1 : 0;
+    const cooldown = parseInt(document.getElementById(`notif-hours-${intervenant_id}-${project_id}`)?.value || 24);
+    await fetch(`${API}?notif_settings=1`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ intervenant_id, project_id, enabled, cooldown_hours: cooldown })
+    });
+    toast('✅ Paramètre sauvegardé');
+  }
+
   function sortBy(field) {
     if (sortField === field) {
       sortDir = sortDir === 'asc' ? 'desc' : 'asc';
@@ -402,10 +571,15 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
       if (project && a.project_id  !== project) return false;
       if (author  && a.author_name !== author)  return false;
       if (status  && a.status      !== status)  return false;
-      if (text && !a.comment.toLowerCase().includes(text) &&
-          !a.author_name.toLowerCase().includes(text) &&
-          !a.page_url.toLowerCase().includes(text) &&
-          !(a.file_name||'').toLowerCase().includes(text)) return false;
+      if (text) {
+        const searchId = text.replace(/^#/, ''); // accepte "38" ou "#38"
+        const matchId  = String(a.id) === searchId || ('#'+a.id) === text;
+        if (!matchId &&
+            !a.comment.toLowerCase().includes(text) &&
+            !a.author_name.toLowerCase().includes(text) &&
+            !a.page_url.toLowerCase().includes(text) &&
+            !(a.file_name||'').toLowerCase().includes(text)) return false;
+      }
       return true;
     });
     // Appliquer le tri
@@ -443,6 +617,7 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
           <td>
             <div style="font-weight:600">${esc(a.author_name)}</div>
             ${a.author_email?`<div style="font-size:11px;color:#757686">${esc(a.author_email)}</div>`:''}
+            ${a.intervenant?`<div style="font-size:11px;color:#3ce65f;margin-top:2px">👤 ${esc(a.intervenant.prenom)}</div>`:''}
           </td>
           <td>
             <div class="comment-preview" title="${esc(a.comment)}">${esc(a.comment)}</div>
@@ -677,8 +852,9 @@ $is_auth = !empty($_SESSION['uxnote_auth']);
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     document.getElementById('tab-'+name).classList.add('active');
     btn.classList.add('active');
-    if (name==='logs')     loadLogs();
-    if (name==='archives') loadArchives();
+    if (name==='logs')         loadLogs();
+    if (name==='archives')     loadArchives();
+    if (name==='intervenants') loadIntervenants();
   }
 
   // ── Snippet ──
