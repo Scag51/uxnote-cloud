@@ -686,6 +686,8 @@
     if (fi) fi.value = '';
     document.getElementById('uxnote-user-fields').style.display = currentUser ? 'none' : 'block';
     document.getElementById('uxnote-modal-overlay').classList.add('open');
+    // Recharger les intervenants à chaque ouverture du modal
+    loadIntervenants();
     setTimeout(() => document.getElementById('uxnote-input-text').focus(), 50);
   }
 
