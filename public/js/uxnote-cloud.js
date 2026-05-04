@@ -30,6 +30,8 @@
   let pendingPos     = null;
   let authenticated  = !PASSWORD;
   let projectArchived = false;
+  let intervenants   = [];
+  let filterStatus   = 'all'; // 'all', 'open', 'resolved'
 
   const C = {
     primary: '#222339', accent: '#3ce65f', slate: '#757686',
@@ -81,6 +83,25 @@
     #uxnote-close-panel:hover { opacity:1; }
     #uxnote-panel-body { flex:1; overflow-y:auto; padding:16px; background:${C.light}; }
     #uxnote-panel-footer { padding:12px 16px; border-top:1px solid #e2e4ef; background:${C.white}; flex-shrink:0; }
+    #uxnote-filter-bar {
+      display: flex; gap: 6px; margin-bottom: 10px;
+    }
+    .uxnote-filter-btn {
+      all: initial;
+      flex: 1; padding: 6px 4px; border-radius: 6px; border: 1px solid #e2e4ef;
+      background: ${C.white}; cursor: pointer; font-size: 11px; font-weight: 600;
+      font-family: 'Montserrat', sans-serif; color: ${C.slate};
+      text-align: center; transition: all 0.15s; box-sizing: border-box;
+    }
+    .uxnote-filter-btn.active { background: ${C.primary} !important; color: ${C.white} !important; border-color: ${C.primary} !important; }
+    .uxnote-filter-btn:hover:not(.active) { background: ${C.light} !important; }
+    #uxnote-modal select {
+      width: 100%; box-sizing: border-box; padding: 10px 12px;
+      border: 1px solid #e2e4ef; border-radius: 8px; font-size: 13px;
+      margin-bottom: 10px; outline: none; font-family: 'Montserrat', sans-serif;
+      color: ${C.primary}; background: ${C.white}; appearance: auto;
+    }
+    #uxnote-modal select:focus { border-color: ${C.accent}; }
 
     .uxnote-archived-banner {
       background:#f0f1f8; border:1px solid #c8cadf; border-radius:8px;
@@ -338,6 +359,11 @@
         <div class="uxnote-empty"><p>Aucune annotation sur cette page.</p></div>
       </div>
       <div id="uxnote-panel-footer">
+        <div id="uxnote-filter-bar">
+          <button class="uxnote-filter-btn active" onclick="setFilter('all',this)">Tous</button>
+          <button class="uxnote-filter-btn" onclick="setFilter('open',this)">● En cours</button>
+          <button class="uxnote-filter-btn" onclick="setFilter('resolved',this)">✓ Résolus</button>
+        </div>
         <button id="uxnote-add-btn">+ Ajouter une annotation</button>
       </div>`;
     document.body.appendChild(panel);
@@ -366,6 +392,9 @@
           <input id="uxnote-input-name"  type="text"  placeholder="Votre prénom / nom *" />
           <input id="uxnote-input-email" type="email" placeholder="Votre email (optionnel)" />
         </div>
+        <select id="uxnote-input-intervenant">
+          <option value="">— Assigner à un intervenant Équinoxes —</option>
+        </select>
         <textarea id="uxnote-input-text" placeholder="Décrivez votre annotation..."></textarea>
         <label class="uxnote-file-label">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -559,6 +588,20 @@
     } catch(e) { projectArchived = false; }
   }
 
+  async function loadIntervenants() {
+    try {
+      const res  = await fetch(`${API}?intervenants=1`);
+      const data = await res.json();
+      intervenants = (data.intervenants || []).filter(i => i.actif == 1);
+      const sel = document.getElementById('uxnote-input-intervenant');
+      if (sel) {
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">— Assigner à un intervenant Équinoxes —</option>' +
+          intervenants.map(i => `<option value="${i.id}" ${i.id==cur?'selected':''}>${i.prenom}${i.poste?' ('+i.poste+')':''}</option>`).join('');
+      }
+    } catch(e) {}
+  }
+
   async function loadAnnotations() {
     try {
       const res  = await fetch(`${API}?project_id=${encodeURIComponent(PROJECT_ID)}&page_url=${encodeURIComponent(PAGE_URL)}`);
@@ -733,11 +776,13 @@
       fd.append('author_token', userToken);
       fd.append('comment',      text);
       // Uniquement le XPath — la position est recalculée via getBoundingClientRect
-      fd.append('xpath',  pendingPos ? pendingPos.xpath : '');
-      fd.append('pos_x',  0);
-      fd.append('pos_y',  0);
-      fd.append('rel_x',  0);
-      fd.append('rel_y',  0);
+      fd.append('xpath',       pendingPos ? pendingPos.xpath : '');
+      fd.append('pos_x',       0);
+      fd.append('pos_y',       0);
+      fd.append('rel_x',       0);
+      fd.append('rel_y',       0);
+      const selInterv = document.getElementById('uxnote-input-intervenant');
+      fd.append('assigned_to', selInterv ? (selInterv.value || 0) : 0);
       const fileInput = document.getElementById('uxnote-file-input');
       if (fileInput && fileInput.files[0]) fd.append('file', fileInput.files[0]);
       await fetch(API, { method:'POST', body:fd });
@@ -855,7 +900,10 @@
   async function init() {
     createUI(); bindEvents();
     await checkProjectStatus();
-    if (authenticated) loadAnnotations();
+    if (authenticated) {
+      loadAnnotations();
+      loadIntervenants();
+    }
 
     // Refresh au resize et scroll (comme l'original)
     window.addEventListener('resize', renderPins);
