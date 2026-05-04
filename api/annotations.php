@@ -505,70 +505,104 @@ function sendEmail($to_email, $to_name, $project_id, $annotation_id, $author_nam
 }
 
 function sendSmtp($to, $subject, $html) {
-    $host     = SMTP_HOST;
-    $port     = SMTP_PORT;
-    $username = SMTP_USER;
-    $password = SMTP_PASS;
-    $from     = SMTP_FROM;
+    $host      = SMTP_HOST;
+    $username  = SMTP_USER;
+    $password  = SMTP_PASS;
+    $from      = SMTP_FROM;
     $from_name = SMTP_FROM_NAME;
 
-    try {
-        $socket = @fsockopen('tls://' . $host, $port, $errno, $errstr, 10);
+    // Planet Hoster : SSL implicite port 465
+    $ctx = stream_context_create([
+        'ssl' => [
+            'verify_peer'       => false,
+            'verify_peer_name'  => false,
+            'allow_self_signed' => true,
+        ]
+    ]);
+
+    $socket = @stream_socket_client(
+        'ssl://' . $host . ':465',
+        $errno, $errstr, 15,
+        STREAM_CLIENT_CONNECT,
+        $ctx
+    );
+
+    if (!$socket) {
+        // Fallback STARTTLS port 587
+        $socket = @stream_socket_client(
+            'tcp://' . $host . ':587',
+            $errno, $errstr, 15
+        );
         if (!$socket) {
-            // Essayer sans TLS sur port 587
-            $socket = @fsockopen($host, $port, $errno, $errstr, 10);
-            if (!$socket) return false;
+            addLog('smtp_error', '', 'SMTP', "Connexion impossible : $errstr ($errno)");
+            return false;
         }
+        // EHLO + STARTTLS
+        $resp = fgets($socket, 512);
+        fwrite($socket, "EHLO " . gethostname() . "\r\n");
+        // Lire toutes les lignes EHLO
+        do { $line = fgets($socket, 512); } while (substr($line, 3, 1) === '-');
+        fwrite($socket, "STARTTLS\r\n");
+        $resp = fgets($socket, 512);
+        if (strpos($resp, '220') === false) { fclose($socket); return false; }
+        stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+    } else {
+        $resp = fgets($socket, 512); // Banner 220
+        if (strpos($resp, '220') === false) { fclose($socket); return false; }
+    }
 
-        $read = fgets($socket, 512);
-        if (strpos($read, '220') !== 0) { fclose($socket); return false; }
+    // EHLO
+    fwrite($socket, "EHLO " . gethostname() . "\r\n");
+    do { $line = fgets($socket, 512); } while ($line && substr($line, 3, 1) === '-');
 
-        $cmds = [
-            "EHLO " . gethostname() . "\r\n",
-        ];
-
-        foreach ($cmds as $cmd) {
-            fputs($socket, $cmd);
-            $read = fgets($socket, 512);
-        }
-
-        // AUTH LOGIN
-        fputs($socket, "AUTH LOGIN\r\n");
-        fgets($socket, 512);
-        fputs($socket, base64_encode($username) . "\r\n");
-        fgets($socket, 512);
-        fputs($socket, base64_encode($password) . "\r\n");
-        $auth = fgets($socket, 512);
-        if (strpos($auth, '235') === false) { fclose($socket); return false; }
-
-        $boundary = md5(time());
-        $headers  = "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <$from>\r\n";
-        $headers .= "To: $to\r\n";
-        $headers .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
-        $headers .= "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: multipart/alternative; boundary=\"$boundary\"\r\n";
-        $headers .= "Date: " . date('r') . "\r\n";
-
-        $body  = "--$boundary\r\n";
-        $body .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n";
-        $body .= strip_tags($html) . "\r\n";
-        $body .= "--$boundary\r\n";
-        $body .= "Content-Type: text/html; charset=UTF-8\r\n\r\n";
-        $body .= $html . "\r\n";
-        $body .= "--$boundary--\r\n";
-
-        fputs($socket, "MAIL FROM: <$from>\r\n"); fgets($socket, 512);
-        fputs($socket, "RCPT TO: <$to>\r\n");     fgets($socket, 512);
-        fputs($socket, "DATA\r\n");               fgets($socket, 512);
-        fputs($socket, $headers . "\r\n" . $body . "\r\n.\r\n");
-        $sent = fgets($socket, 512);
-        fputs($socket, "QUIT\r\n");
+    // AUTH LOGIN
+    fwrite($socket, "AUTH LOGIN\r\n");
+    fgets($socket, 512); // 334 Username
+    fwrite($socket, base64_encode($username) . "\r\n");
+    fgets($socket, 512); // 334 Password
+    fwrite($socket, base64_encode($password) . "\r\n");
+    $auth = fgets($socket, 512);
+    if (strpos($auth, '235') === false) {
+        addLog('smtp_error', '', 'SMTP', "Auth échouée : $auth");
         fclose($socket);
-
-        return strpos($sent, '250') !== false;
-    } catch (Exception $e) {
         return false;
     }
+
+    // Message
+    $boundary = md5(uniqid());
+    $headers  = "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <$from>\r\n";
+    $headers .= "To: $to\r\n";
+    $headers .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: multipart/alternative; boundary=\"$boundary\"\r\n";
+    $headers .= "Date: " . date('r') . "\r\n";
+    $headers .= "X-Mailer: UXNote-Cloud/5.0\r\n";
+
+    $body  = "--$boundary\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n\r\n";
+    $body .= strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $html)) . "\r\n";
+    $body .= "--$boundary\r\n";
+    $body .= "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+    $body .= $html . "\r\n";
+    $body .= "--$boundary--\r\n";
+
+    fwrite($socket, "MAIL FROM: <$from>\r\n"); fgets($socket, 512);
+    fwrite($socket, "RCPT TO: <$to>\r\n");     $rcpt = fgets($socket, 512);
+    if (strpos($rcpt, '250') === false && strpos($rcpt, '251') === false) {
+        addLog('smtp_error', '', 'SMTP', "RCPT TO refusé : $rcpt");
+        fclose($socket); return false;
+    }
+    fwrite($socket, "DATA\r\n"); fgets($socket, 512);
+    fwrite($socket, $headers . "\r\n" . $body . "\r\n.\r\n");
+    $sent = fgets($socket, 512);
+    fwrite($socket, "QUIT\r\n");
+    fclose($socket);
+
+    if (strpos($sent, '250') !== false) {
+        return true;
+    }
+    addLog('smtp_error', '', 'SMTP', "Envoi échoué : $sent");
+    return false;
 }
 
 // ─── Autres fonctions ─────────────────────────────────────────────────────────
