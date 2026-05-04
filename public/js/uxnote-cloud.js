@@ -101,7 +101,9 @@
       display:inline-flex; align-items:center; gap:5px;
       background:#f0f9f1; border:1px solid #c7f0d2; border-radius:5px;
       padding:4px 9px; font-size:11px; color:#2ab54a; margin-bottom:8px; font-weight:500;
+      text-decoration:none; cursor:pointer; transition:background 0.15s;
     }
+    .uxnote-file-attach:hover { background:#dcfce7; }
     .uxnote-replies { margin-top:10px; padding-top:10px; border-top:1px dashed #e2e4ef; }
     .uxnote-reply-item { background:${C.light}; border-radius:7px; padding:8px 10px; margin-bottom:6px; font-size:12px; }
     .uxnote-reply-meta { color:${C.slate}; margin-bottom:3px; font-size:11px; }
@@ -117,20 +119,43 @@
     .uxnote-reply-actions { display:flex; gap:6px; justify-content:flex-end; }
 
     .uxnote-annotation-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    /* Reset complet des boutons — évite l'héritage des styles du site client */
     .uxnote-btn-sm {
-      padding:5px 11px; border-radius:5px; border:1px solid #e2e4ef;
-      background:${C.white}; cursor:pointer; font-size:11px; color:#475569;
-      transition:all 0.15s; font-family:'Montserrat',sans-serif; font-weight:500;
+      all: initial;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+      padding: 5px 11px !important;
+      border-radius: 6px !important;
+      border: 1px solid #e2e4ef !important;
+      background: ${C.white} !important;
+      cursor: pointer !important;
+      font-size: 11px !important;
+      font-family: 'Montserrat', sans-serif !important;
+      font-weight: 500 !important;
+      color: #475569 !important;
+      transition: all 0.15s !important;
+      line-height: 1.4 !important;
+      box-sizing: border-box !important;
+      white-space: nowrap !important;
+      text-decoration: none !important;
     }
-    .uxnote-btn-sm:hover { background:${C.light}; }
-    .uxnote-btn-sm.see-btn   { border-color:#e2e4ef; color:${C.slate}; }
-    .uxnote-btn-sm.reply-btn { border-color:${C.primary}; color:${C.primary}; }
-    .uxnote-btn-sm.reply-btn:hover { background:#f0f1f8; }
-    .uxnote-btn-sm.resolve   { border-color:${C.accent}; color:#2ab54a; }
-    .uxnote-btn-sm.resolve:hover { background:#f0f9f1; }
-    .uxnote-btn-sm.unresolve { border-color:#e2e4ef; color:${C.slate}; }
-    .uxnote-btn-sm.delete    { border-color:#e2e4ef; color:${C.slate}; }
-    .uxnote-btn-sm.delete:hover { border-color:${C.danger}; color:${C.danger}; background:#fff0f1; }
+    .uxnote-btn-sm:hover { background: ${C.light} !important; }
+    /* Voir — bleu foncé sobre */
+    .uxnote-btn-sm.see-btn   { background: ${C.primary} !important; color: ${C.white} !important; border-color: ${C.primary} !important; }
+    .uxnote-btn-sm.see-btn:hover { background: #2d2f4a !important; }
+    /* Répondre — bleu foncé sobre */
+    .uxnote-btn-sm.reply-btn { background: ${C.primary} !important; color: ${C.white} !important; border-color: ${C.primary} !important; }
+    .uxnote-btn-sm.reply-btn:hover { background: #2d2f4a !important; }
+    /* Résoudre — vert sobre */
+    .uxnote-btn-sm.resolve   { background: ${C.primary} !important; color: ${C.white} !important; border-color: ${C.primary} !important; }
+    .uxnote-btn-sm.resolve:hover { background: #2d2f4a !important; }
+    /* Réouvrir */
+    .uxnote-btn-sm.unresolve { background: ${C.light} !important; color: ${C.slate} !important; border-color: #e2e4ef !important; }
+    .uxnote-btn-sm.unresolve:hover { background: #e2e5f0 !important; }
+    /* Supprimer */
+    .uxnote-btn-sm.delete    { background: ${C.light} !important; color: ${C.slate} !important; border-color: #e2e4ef !important; }
+    .uxnote-btn-sm.delete:hover { background: #fff0f1 !important; color: ${C.danger} !important; border-color: ${C.danger} !important; }
 
     .uxnote-pin {
       position:absolute;
@@ -190,12 +215,25 @@
     #uxnote-file-selected { font-size:11px; color:#2ab54a; font-weight:600; margin-bottom:8px; min-height:16px; }
     #uxnote-modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:4px; }
     .uxnote-modal-btn {
-      padding:9px 18px; border-radius:8px; border:none; cursor:pointer;
-      font-size:13px; font-weight:600; font-family:'Montserrat',sans-serif; transition:all 0.15s;
+      all: initial;
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 9px 18px !important;
+      border-radius: 8px !important;
+      border: none !important;
+      cursor: pointer !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      font-family: 'Montserrat', sans-serif !important;
+      transition: all 0.15s !important;
+      box-sizing: border-box !important;
+      line-height: 1.4 !important;
     }
-    .uxnote-modal-btn.cancel { background:${C.light}; color:${C.slate}; }
-    .uxnote-modal-btn.submit { background:${C.primary}; color:${C.white}; border-left:3px solid ${C.accent}; }
-    .uxnote-modal-btn.submit:hover { background:#2d2f4a; }
+    .uxnote-modal-btn.cancel { background:${C.light} !important; color:${C.slate} !important; }
+    .uxnote-modal-btn.cancel:hover { background:#e2e4ef !important; }
+    .uxnote-modal-btn.submit { background:${C.primary} !important; color:${C.white} !important; border-left:3px solid ${C.accent} !important; }
+    .uxnote-modal-btn.submit:hover { background:#2d2f4a !important; }
 
     #uxnote-pwd-overlay {
       position:fixed; inset:0; background:rgba(34,35,57,0.6); z-index:9999998;
@@ -255,12 +293,25 @@
     }
     #uxnote-marker-layer .uxnote-pin { pointer-events: auto; }
     #uxnote-add-btn {
-      width:100%; padding:10px; background:${C.primary}; color:${C.white};
-      border:none; border-radius:8px; cursor:pointer; font-size:13px; font-weight:600;
-      font-family:'Montserrat',sans-serif; border-left:3px solid ${C.accent}; transition:background 0.15s;
+      all: initial;
+      display: block !important;
+      width: 100% !important;
+      padding: 10px !important;
+      background: ${C.primary} !important;
+      color: ${C.white} !important;
+      border: none !important;
+      border-left: 3px solid ${C.accent} !important;
+      border-radius: 8px !important;
+      cursor: pointer !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      font-family: 'Montserrat', sans-serif !important;
+      transition: background 0.15s !important;
+      text-align: center !important;
+      box-sizing: border-box !important;
     }
-    #uxnote-add-btn:hover { background:#2d2f4a; }
-    #uxnote-add-btn:disabled { background:${C.slate}; border-left-color:#9b9dba; cursor:default; }
+    #uxnote-add-btn:hover { background:#2d2f4a !important; }
+    #uxnote-add-btn:disabled { background:${C.slate} !important; border-left-color:#9b9dba !important; cursor:default !important; }
   `;
   document.head.appendChild(style);
 
@@ -393,13 +444,13 @@
       return `
         <div class="uxnote-annotation-item ${a.status==='resolved'?'resolved':''} ${isMine?'mine':''}" data-id="${a.id}">
           <div class="uxnote-annotation-meta">
-            <strong>#${i+1} ${escHtml(a.author_name)}</strong>
+            <strong>#${a.id} ${escHtml(a.author_name)}</strong>
             ${isMine?' <span style="color:#9b5de5;font-weight:700">(moi)</span>':''}
             · ${formatDate(a.created_at)}
             ${a.status==='resolved'?' · <span style="color:#2ab54a">✓ Résolu</span>':''}
           </div>
           <div class="uxnote-annotation-text">${escHtml(a.comment)}</div>
-          ${a.file_name?`<div class="uxnote-file-attach">📎 ${escHtml(a.file_name)}</div>`:''}
+          ${a.file_name?`<a class="uxnote-file-attach" href="${API_BASE}/api/annotations.php?download=${encodeURIComponent(a.file_path)}" download="${escHtml(a.file_name)}" target="_blank">📎 ${escHtml(a.file_name)} ⬇</a>`:''}
           ${replies?`<div class="uxnote-replies">${replies}</div>`:''}
           ${!projectArchived ? `
           <div class="uxnote-reply-form" id="reply-form-${a.id}">
@@ -411,14 +462,26 @@
           </div>` : ''}
           <div class="uxnote-annotation-actions">
             <button class="uxnote-btn-sm see-btn" onclick="document.uxnoteCloud.focusPin(${a.id})">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:3px"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Voir
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Voir
             </button>
             ${!projectArchived ? `
-            <button class="uxnote-btn-sm reply-btn" onclick="toggleReplyForm(${a.id})">↩ Répondre</button>
+            <button class="uxnote-btn-sm reply-btn" onclick="toggleReplyForm(${a.id})">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+              Répondre
+            </button>
             ${a.status!=='resolved'
-              ?`<button class="uxnote-btn-sm resolve" onclick="document.uxnoteCloud.resolve(${a.id})">✓ Résoudre</button>`
-              :`<button class="uxnote-btn-sm unresolve" onclick="document.uxnoteCloud.unresolve(${a.id})">↩ Réouvrir</button>`}
-            ${isMine?`<button class="uxnote-btn-sm delete" onclick="document.uxnoteCloud.deleteMine(${a.id})">🗑</button>`:''}
+              ?`<button class="uxnote-btn-sm resolve" onclick="document.uxnoteCloud.resolve(${a.id})">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  Résoudre
+                </button>`
+              :`<button class="uxnote-btn-sm unresolve" onclick="document.uxnoteCloud.unresolve(${a.id})">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                  Réouvrir
+                </button>`}
+            ${isMine?`<button class="uxnote-btn-sm delete" onclick="document.uxnoteCloud.deleteMine(${a.id})">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+              </button>`:''}
             ` : ''}
           </div>
         </div>`;
@@ -453,8 +516,8 @@
       // Créer le pin dans le marker layer (position:absolute dans fixed layer)
       const pin = document.createElement('div');
       pin.className = 'uxnote-pin status-' + a.status + (a.author_token === userToken ? ' mine' : '');
-      pin.innerHTML  = '<span class="uxnote-pin-number">' + (i+1) + '</span>';
-      pin.title      = '#' + (i+1) + ' ' + a.author_name + ': ' + a.comment;
+      pin.innerHTML  = '<span class="uxnote-pin-number">' + a.id + '</span>';
+      pin.title      = '#' + a.id + ' ' + a.author_name + ': ' + a.comment;
       markerLayer.appendChild(pin);
       pinElements.push(pin);
 
